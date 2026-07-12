@@ -196,6 +196,11 @@ export function ProjectDetail() {
   const [error, setError] =
     useState("");
 
+    const [
+  paymentLoading,
+  setPaymentLoading,
+] = useState(false);
+
   const loadProject = async () => {
     try {
       setLoading(true);
@@ -220,86 +225,154 @@ export function ProjectDetail() {
   }, [id]);
 
   const handlePayment = async () => {
-    try {
-      setMessage("");
-      setError("");
+  if (paymentLoading) {
+    return;
+  }
 
-      if (!project?.plan_id) {
-        throw new Error(
-          "This project does not have a valid plan."
-        );
-      }
+  try {
+    setPaymentLoading(true);
+    setMessage("");
+    setError("");
 
-      const loaded =
-        await loadRazorpay();
+    if (!project?.plan_id) {
+      throw new Error(
+        "This project does not have a valid plan."
+      );
+    }
 
-      if (!loaded) {
-        throw new Error(
-          "Could not load Razorpay Checkout."
-        );
-      }
+    const loaded =
+      await loadRazorpay();
 
-      if (
-        !import.meta.env
-          .VITE_RAZORPAY_KEY_ID
-      ) {
-        throw new Error(
-          "Razorpay is not configured yet."
-        );
-      }
+    if (!loaded) {
+      throw new Error(
+        "Could not load Razorpay Checkout. Please check your internet connection and try again."
+      );
+    }
 
-      const order =
-        await invokePayment(
-          project.id,
-          project.plan_id
-        );
+    const razorpayKeyId =
+      import.meta.env
+        .VITE_RAZORPAY_KEY_ID;
 
-      const razorpay =
-        new window.Razorpay({
-          key:
-            import.meta.env
-              .VITE_RAZORPAY_KEY_ID,
+    if (!razorpayKeyId) {
+      throw new Error(
+        "Razorpay is not configured yet."
+      );
+    }
 
-          amount: order.amount,
-          currency:
-            order.currency,
+    const order =
+      await invokePayment(
+        project.id,
+        project.plan_id
+      );
 
-          name: "Shipyard",
+    if (
+      !order?.razorpay_order_id ||
+      !order?.amount
+    ) {
+      throw new Error(
+        "Shipyard could not prepare the payment order."
+      );
+    }
 
-          description:
-            `${project.app_name} — ${
-              project.plans?.name ||
-              "Testing plan"
-            }`,
+    const razorpay =
+      new window.Razorpay({
+        key: razorpayKeyId,
 
-          order_id:
-            order.razorpay_order_id,
+        amount: order.amount,
 
-          handler: async (
-            response
-          ) => {
+        currency:
+          order.currency || "INR",
+
+        name: "Shipyard",
+
+        description:
+          `${project.app_name} — ${
+            project.plans?.name ||
+            "Testing plan"
+          }`,
+
+        order_id:
+          order.razorpay_order_id,
+
+        theme: {
+          color: "#101828",
+        },
+
+        modal: {
+          confirm_close: true,
+
+          ondismiss: () => {
+            setPaymentLoading(false);
+
+            setError(
+              "Payment was cancelled. Your project is still unpaid, and you can try again whenever you are ready."
+            );
+          },
+        },
+
+        handler: async (
+          response
+        ) => {
+          try {
+            setMessage(
+              "Payment received. Verifying securely…"
+            );
+
+            setError("");
+
             await verifyPayment({
               ...response,
+
               projectId:
                 project.id,
             });
 
             setMessage(
-              "Payment verified successfully."
+              "Payment verified successfully. Tester recruitment can now begin."
             );
 
             await loadProject();
-          },
-        });
+          } catch (
+            verificationError
+          ) {
+            setMessage("");
 
-      razorpay.open();
-    } catch (err) {
-      setError(
-        err.message ||
-          "Payment could not be started."
-      );
-    }
-  };
+            setError(
+              verificationError.message ||
+                "Payment was received, but Shipyard could not verify it. Please contact support before paying again."
+            );
+          } finally {
+            setPaymentLoading(false);
+          }
+        },
+      });
+
+    razorpay.on(
+      "payment.failed",
+      (response) => {
+        setPaymentLoading(false);
+
+        const paymentError =
+          response?.error;
+
+        setError(
+          paymentError?.description ||
+            paymentError?.reason ||
+            "The payment failed. No successful payment was recorded, so you can try again."
+        );
+      }
+    );
+
+    razorpay.open();
+  } catch (err) {
+    setPaymentLoading(false);
+
+    setError(
+      err.message ||
+        "Payment could not be started."
+    );
+  }
+};
 
   const metrics = useMemo(() => {
     if (!project) {
@@ -530,12 +603,168 @@ export function ProjectDetail() {
       )}
 
       {error && (
-        <div className="alert error">
-          {error}
-        </div>
-      )}
+  <div className="alert error">
+    {error}
+  </div>
+)}
 
-      <div className="detail-grid">
+{project.payment_status !==
+  "paid" && (
+  <div className="project-payment-callout">
+    <div className="project-payment-callout-icon">
+      ₹
+    </div>
+
+    <div className="grow">
+      <strong>
+        Payment required to begin recruitment
+      </strong>
+
+      <p>
+        Complete the secure payment for
+        the {plan.name || "selected"}{" "}
+        plan. Your project will move to
+        recruitment immediately after
+        server verification.
+      </p>
+    </div>
+
+    <button
+      type="button"
+      className="button"
+      disabled={paymentLoading}
+      onClick={handlePayment}
+    >
+      {paymentLoading
+        ? "Opening secure checkout…"
+        : `Pay ₹${
+            plan.price_inr ?? ""
+          } securely`}
+    </button>
+  </div>
+)}
+
+<div className="detail-grid">
+
+  <Card className="project-payment-card">
+  <div className="payment-card-heading">
+    <div>
+      <small className="eyebrow">
+        Selected plan
+      </small>
+
+      <h2>
+        {plan.name ||
+          "Testing plan"}
+      </h2>
+    </div>
+
+    <Badge
+      tone={
+        project.payment_status ===
+        "paid"
+          ? "green"
+          : "purple"
+      }
+    >
+      {project.payment_status ===
+      "paid"
+        ? "Paid"
+        : "Payment required"}
+    </Badge>
+  </div>
+
+  <strong className="money">
+    ₹{plan.price_inr ?? "—"}
+  </strong>
+
+  <p>
+    Managed Android testing with
+    verified daily participation.
+  </p>
+
+  <div className="schedule-list">
+    <div>
+      <span>
+        Recruitment capacity
+      </span>
+
+      <strong>
+        {metrics.recruitmentTarget}{" "}
+        testers
+      </strong>
+    </div>
+
+    <div>
+      <span>
+        Successful testers
+      </span>
+
+      <strong>
+        {metrics.required}
+      </strong>
+    </div>
+
+    <div>
+      <span>
+        Testing duration
+      </span>
+
+      <strong>
+        {metrics.durationDays} days
+      </strong>
+    </div>
+
+    <div>
+      <span>
+        Reward per tester
+      </span>
+
+      <strong>
+        ₹
+        {project.reward_per_tester ||
+          plan.reward_inr ||
+          0}
+      </strong>
+    </div>
+  </div>
+
+  {project.payment_status !==
+  "paid" ? (
+    <>
+      <button
+        type="button"
+        className="button wide"
+        disabled={paymentLoading}
+        onClick={handlePayment}
+      >
+        {paymentLoading
+          ? "Opening secure checkout…"
+          : `Pay ₹${
+              plan.price_inr ?? ""
+            } securely`}
+      </button>
+
+      <small className="payment-security-note">
+        Secure payment powered by
+        Razorpay. Recruitment begins
+        only after server verification.
+      </small>
+    </>
+  ) : (
+    <div className="payment-verified-panel">
+      <Badge tone="green">
+        Payment verified
+      </Badge>
+
+      <span>
+        This release is cleared for
+        tester recruitment.
+      </span>
+    </div>
+  )}
+</Card>
+
         <Card className="span2">
           <div className="card-head">
             <div>
@@ -635,53 +864,7 @@ export function ProjectDetail() {
           </div>
         </Card>
 
-        <Card>
-          <h2>Plan</h2>
-
-          <strong className="money">
-            ₹{plan.price_inr ?? "—"}
-          </strong>
-
-          <p>
-            {plan.name ||
-              "Testing plan"}
-          </p>
-
-          <div className="schedule-list">
-            <div>
-              <span>
-                Successful testers
-              </span>
-              <strong>
-                {metrics.required}
-              </strong>
-            </div>
-
-            <div>
-              <span>Reward per tester</span>
-              <strong>
-                ₹
-                {project.reward_per_tester ||
-                  plan.reward_inr ||
-                  0}
-              </strong>
-            </div>
-          </div>
-
-          {project.payment_status !==
-          "paid" ? (
-            <button
-              className="button wide"
-              onClick={handlePayment}
-            >
-              Pay securely
-            </button>
-          ) : (
-            <Badge tone="green">
-              Payment verified
-            </Badge>
-          )}
-        </Card>
+       
 
         <Card className="span2">
           <div className="card-head">

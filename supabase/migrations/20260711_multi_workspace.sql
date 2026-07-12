@@ -1,0 +1,4 @@
+-- This migration is the multi-workspace SQL already provided in chat.
+-- Run it once in Supabase SQL Editor before using this build.
+-- It adds is_developer, is_tester, is_admin, preferred_workspace,
+-- and the enable/switch workspace RPC functions.

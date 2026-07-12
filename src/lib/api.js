@@ -1006,7 +1006,6 @@ export async function getProofSignedUrl(
 // =========================================================
 // PAYMENT GATEWAYS
 // =========================================================
-
 async function invokeEdgeFunction(
   functionName,
   body
@@ -1022,21 +1021,28 @@ async function invokeEdgeFunction(
 
   const isTemporaryConnectionError = ({
     error,
+    message,
     status,
   }) => {
-        const errorMessage =
+    const errorName =
       String(
-        error?.message || ""
+        error?.name || ""
+      ).toLowerCase();
+
+    const normalizedMessage =
+      String(
+        message ||
+          error?.message ||
+          ""
       ).toLowerCase();
 
     /*
-     * Supabase can occasionally return this
-     * temporary gateway response even though
-     * the deployed function exists. It is safe
-     * to retry this exact connection error.
+     * Supabase may occasionally return this
+     * response even though the deployed Edge
+     * Function exists and works on retry.
      */
     if (
-      errorMessage.includes(
+      normalizedMessage.includes(
         "requested function was not found"
       )
     ) {
@@ -1044,9 +1050,8 @@ async function invokeEdgeFunction(
     }
 
     /*
-     * Other HTTP validation and authentication
-     * errors are real server responses.
-     * They must not be retried.
+     * Other 4xx responses represent genuine
+     * authentication or validation failures.
      */
     if (
       Number.isFinite(status) &&
@@ -1055,22 +1060,15 @@ async function invokeEdgeFunction(
     ) {
       return false;
     }
+
     /*
-     * Temporary server or gateway failures
-     * may succeed on another attempt.
+     * Temporary gateway/server failures.
      */
     if (
       [502, 503, 504].includes(status)
     ) {
       return true;
     }
-
-    const errorName =
-      String(
-        error?.name || ""
-      ).toLowerCase();
-
-    
 
     return (
       errorName.includes(
@@ -1079,37 +1077,38 @@ async function invokeEdgeFunction(
       errorName.includes(
         "aborterror"
       ) ||
-      errorMessage.includes(
+      normalizedMessage.includes(
         "failed to send a request to the edge function"
       ) ||
-      errorMessage.includes(
+      normalizedMessage.includes(
         "failed to fetch"
       ) ||
-      errorMessage.includes(
+      normalizedMessage.includes(
         "fetch failed"
       ) ||
-      errorMessage.includes(
+      normalizedMessage.includes(
         "networkerror"
       ) ||
-      errorMessage.includes(
+      normalizedMessage.includes(
         "network error"
       ) ||
-      errorMessage.includes(
+      normalizedMessage.includes(
         "load failed"
       ) ||
-      errorMessage.includes(
+      normalizedMessage.includes(
         "connection"
       ) ||
-      errorMessage.includes(
+      normalizedMessage.includes(
         "timeout"
       ) ||
-      errorMessage.includes(
+      normalizedMessage.includes(
         "timed out"
       )
     );
   };
 
-  let lastTemporaryError = null;
+  let lastTemporaryError =
+    null;
 
   for (
     let attempt = 1;
@@ -1129,9 +1128,9 @@ async function invokeEdgeFunction(
 
     if (!error) {
       /*
-       * An error returned inside valid
-       * function data is a real application
-       * or validation error. Do not retry it.
+       * This is a genuine application error
+       * returned successfully by the function.
+       * Do not retry it.
        */
       if (data?.error) {
         throw new Error(
@@ -1147,8 +1146,8 @@ async function invokeEdgeFunction(
       "The payment request failed.";
 
     let status =
-      error.context?.status ||
-      error.status ||
+      error.context?.status ??
+      error.status ??
       null;
 
     try {
@@ -1166,31 +1165,34 @@ async function invokeEdgeFunction(
       }
 
       status =
-        error.context?.status ||
-        errorBody?.status ||
+        error.context?.status ??
+        errorBody?.status ??
         status;
     } catch {
       /*
-       * Connection failures often do not
-       * contain a readable JSON response.
+       * A connection failure may not contain
+       * a readable JSON response.
        */
     }
+
+    const numericStatus =
+      status === null ||
+      status === undefined
+        ? null
+        : Number(status);
 
     const shouldRetry =
       isTemporaryConnectionError({
         error,
+        message,
         status:
-          status === null
-            ? null
-            : Number(status),
+          Number.isFinite(
+            numericStatus
+          )
+            ? numericStatus
+            : null,
       });
 
-    /*
-     * Unauthorized, invalid project,
-     * already-paid, amount mismatch and
-     * other real Edge Function responses
-     * reach this branch without retrying.
-     */
     if (!shouldRetry) {
       throw new Error(message);
     }
@@ -1203,23 +1205,29 @@ async function invokeEdgeFunction(
     ) {
       const retryDelay =
         attempt === 1
-          ? 800
-          : 1600;
+          ? 1000
+          : 2000;
+
+      console.warn(
+        `Temporary Edge Function failure for "${functionName}". Retrying attempt ${
+          attempt + 1
+        } of ${maximumAttempts}.`,
+        message
+      );
 
       await wait(retryDelay);
     }
   }
 
   console.error(
-    `Edge Function "${functionName}" could not be reached after ${maximumAttempts} attempts.`,
+    `Edge Function "${functionName}" failed after ${maximumAttempts} attempts.`,
     lastTemporaryError
   );
 
   throw new Error(
-    "We could not connect to the secure payment service. Please check your connection and try again."
+    "We could not connect to the secure payment service. Please try again."
   );
 }
-
 
 // =========================================================
 // RAZORPAY

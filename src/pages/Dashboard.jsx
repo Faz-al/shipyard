@@ -882,10 +882,11 @@ export function NewProject() {
     setSubmitting,
   ] = useState(false);
 
-  const [form, setForm] =
+   const [form, setForm] =
     useState({
       app_name: "",
       package_name: "",
+      customer_phone: "",
       description: "",
       platform: "Android",
       google_group_url: "",
@@ -961,28 +962,87 @@ export function NewProject() {
     }));
   };
 
-  const submit = async (event) => {
+   const submit = async (event) => {
     event.preventDefault();
 
     try {
       setSubmitting(true);
       setError("");
 
+      const cleanPhone =
+        form.customer_phone
+          .replace(/\D/g, "")
+          .replace(/^91(?=\d{10}$)/, "");
+
+      if (
+        !/^[6-9]\d{9}$/.test(
+          cleanPhone
+        )
+      ) {
+        throw new Error(
+          "Please enter a valid 10-digit Indian mobile number."
+        );
+      }
+
+      const cleanPackageName =
+        form.package_name
+          .trim()
+          .toLowerCase();
+
       const project =
-        await createProject(form);
+        await createProject({
+          ...form,
+
+          app_name:
+            form.app_name.trim(),
+
+          package_name:
+            cleanPackageName,
+
+          customer_phone:
+            cleanPhone,
+
+          description:
+            form.description.trim(),
+
+          google_group_url:
+            form.google_group_url.trim(),
+
+          android_opt_in_url:
+            form.android_opt_in_url.trim(),
+
+          web_opt_in_url:
+            form.web_opt_in_url.trim(),
+        });
 
       navigate(
         `/projects/${project.id}`
       );
     } catch (err) {
-      setError(
-        err.message ||
-          "The project could not be created."
-      );
+      const errorMessage =
+        String(
+          err?.message || ""
+        );
+
+      if (
+        errorMessage.includes(
+          "projects_active_package_idx"
+        )
+      ) {
+        setError(
+          "An active test already exists for this package name. Complete or cancel the existing test before creating another one."
+        );
+      } else {
+        setError(
+          errorMessage ||
+            "The project could not be created."
+        );
+      }
     } finally {
       setSubmitting(false);
     }
   };
+
 
   return (
     <DashboardLayout>
@@ -1027,6 +1087,35 @@ export function NewProject() {
               }
             />
           </label>
+
+
+                         <label>
+            Mobile number
+
+            <input
+              type="tel"
+              required
+              inputMode="numeric"
+              autoComplete="tel"
+              maxLength="10"
+              placeholder="10-digit mobile number"
+              value={
+                form.customer_phone
+              }
+              onChange={(event) =>
+                updateField(
+                  "customer_phone",
+                  event.target.value
+                    .replace(/\D/g, "")
+                    .slice(0, 10)
+                )
+              }
+            />
+          </label>     
+
+
+
+
 
           <label className="full">
             Short testing brief

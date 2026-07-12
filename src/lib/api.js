@@ -212,19 +212,139 @@ export async function getProject(id) {
 export async function createProject(payload) {
   const user = await getCurrentUser();
 
-  return unwrap(
-    await supabase
-      .from("projects")
-      .insert({
-        ...payload,
-        developer_id: user.id,
-        status: "pending_payment",
-        payment_status: "unpaid",
-        current_day: 0,
-      })
-      .select()
-      .single()
-  );
+  const cleanPackageName =
+    String(
+      payload?.package_name || ""
+    )
+      .trim()
+      .toLowerCase();
+
+  const cleanPhone =
+    String(
+      payload?.customer_phone || ""
+    )
+      .replace(/\D/g, "")
+      .replace(
+        /^91(?=\d{10}$)/,
+        ""
+      );
+
+  if (!cleanPackageName) {
+    throw new Error(
+      "Please enter the Android package name."
+    );
+  }
+
+  if (
+    !/^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/.test(
+      cleanPackageName
+    )
+  ) {
+    throw new Error(
+      "Please enter a valid package name, such as com.company.app."
+    );
+  }
+
+  if (
+    !/^[6-9]\d{9}$/.test(
+      cleanPhone
+    )
+  ) {
+    throw new Error(
+      "Please enter a valid 10-digit Indian mobile number."
+    );
+  }
+
+  const {
+    data,
+    error,
+  } = await supabase
+    .from("projects")
+    .insert({
+      ...payload,
+
+      app_name:
+        String(
+          payload.app_name || ""
+        ).trim(),
+
+      package_name:
+        cleanPackageName,
+
+      customer_phone:
+        cleanPhone,
+
+      description:
+        String(
+          payload.description || ""
+        ).trim(),
+
+      google_group_url:
+        String(
+          payload.google_group_url ||
+            ""
+        ).trim(),
+
+      android_opt_in_url:
+        String(
+          payload.android_opt_in_url ||
+            ""
+        ).trim(),
+
+      web_opt_in_url:
+        String(
+          payload.web_opt_in_url ||
+            ""
+        ).trim(),
+
+      developer_id:
+        user.id,
+
+      status:
+        "pending_payment",
+
+      payment_status:
+        "unpaid",
+
+      current_day: 0,
+    })
+    .select()
+    .single();
+
+  if (error) {
+    const message =
+      String(
+        error.message || ""
+      ).toLowerCase();
+
+    if (
+  message.includes(
+    "projects_active_package_idx"
+  )
+) {
+      throw new Error(
+        "An active test already exists for this package name. Complete or cancel the existing test before creating another one."
+      );
+    }
+
+    if (
+      error.code === "23514" &&
+      message.includes(
+        "customer_phone"
+      )
+    ) {
+      throw new Error(
+        "Please enter a valid 10-digit Indian mobile number."
+      );
+    }
+
+    throw new Error(
+      error.message ||
+        "The project could not be created."
+    );
+  }
+
+  return data;
 }
 
 export async function listPlans() {

@@ -14,8 +14,7 @@ import {
   CalendarDays,
   ClipboardCheck,
   IndianRupee,
-  Plus,
-  ShieldAlert,
+    Plus,
   Users,
 } from "lucide-react";
 
@@ -963,85 +962,27 @@ export function NewProject() {
   };
 
    const submit = async (event) => {
-    event.preventDefault();
+  event.preventDefault();
 
-    try {
-      setSubmitting(true);
-      setError("");
+  try {
+    setSubmitting(true);
+    setError("");
 
-      const cleanPhone =
-        form.customer_phone
-          .replace(/\D/g, "")
-          .replace(/^91(?=\d{10}$)/, "");
+    const project =
+      await createProject(form);
 
-      if (
-        !/^[6-9]\d{9}$/.test(
-          cleanPhone
-        )
-      ) {
-        throw new Error(
-          "Please enter a valid 10-digit Indian mobile number."
-        );
-      }
-
-      const cleanPackageName =
-        form.package_name
-          .trim()
-          .toLowerCase();
-
-      const project =
-        await createProject({
-          ...form,
-
-          app_name:
-            form.app_name.trim(),
-
-          package_name:
-            cleanPackageName,
-
-          customer_phone:
-            cleanPhone,
-
-          description:
-            form.description.trim(),
-
-          google_group_url:
-            form.google_group_url.trim(),
-
-          android_opt_in_url:
-            form.android_opt_in_url.trim(),
-
-          web_opt_in_url:
-            form.web_opt_in_url.trim(),
-        });
-
-      navigate(
-        `/projects/${project.id}`
-      );
-    } catch (err) {
-      const errorMessage =
-        String(
-          err?.message || ""
-        );
-
-      if (
-        errorMessage.includes(
-          "projects_active_package_idx"
-        )
-      ) {
-        setError(
-          "An active test already exists for this package name. Complete or cancel the existing test before creating another one."
-        );
-      } else {
-        setError(
-          errorMessage ||
-            "The project could not be created."
-        );
-      }
-    } finally {
-      setSubmitting(false);
-    }
-  };
+    navigate(
+      `/projects/${project.id}`
+    );
+  } catch (err) {
+    setError(
+      err.message ||
+        "The project could not be created."
+    );
+  } finally {
+    setSubmitting(false);
+  }
+};
 
 
   return (
@@ -1076,16 +1017,21 @@ export function NewProject() {
             Package name
 
             <input
-              required
-              placeholder="com.company.app"
-              value={form.package_name}
-              onChange={(event) =>
-                updateField(
-                  "package_name",
-                  event.target.value
-                )
-              }
-            />
+  required
+  autoCapitalize="none"
+  autoCorrect="off"
+  spellCheck="false"
+  placeholder="com.company.app"
+  value={form.package_name}
+  onChange={(event) =>
+    updateField(
+      "package_name",
+      event.target.value
+        .replace(/\s/g, "")
+        .toLowerCase()
+    )
+  }
+/>
           </label>
 
 

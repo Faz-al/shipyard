@@ -10,6 +10,7 @@ import {
   How,
   TesterPage,
   Legal,
+  Contact,
 } from "./pages/Public";
 
 import {
@@ -98,6 +99,11 @@ export default function App() {
       />
 
       <Route
+  path="/contact"
+  element={<Contact />}
+/>
+
+      <Route
         path="/privacy"
         element={
           <Legal type="privacy" />
@@ -112,11 +118,18 @@ export default function App() {
       />
 
       <Route
-        path="/refund"
-        element={
-          <Legal type="refund" />
-        }
-      />
+  path="/refund"
+  element={
+    <Legal type="refund" />
+  }
+/>
+
+<Route
+  path="/refund-policy"
+  element={
+    <Legal type="refund" />
+  }
+/>
 
       <Route
         path="/login"

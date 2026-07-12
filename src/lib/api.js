@@ -1024,8 +1024,27 @@ async function invokeEdgeFunction(
     error,
     status,
   }) => {
+        const errorMessage =
+      String(
+        error?.message || ""
+      ).toLowerCase();
+
     /*
-     * HTTP validation and authentication
+     * Supabase can occasionally return this
+     * temporary gateway response even though
+     * the deployed function exists. It is safe
+     * to retry this exact connection error.
+     */
+    if (
+      errorMessage.includes(
+        "requested function was not found"
+      )
+    ) {
+      return true;
+    }
+
+    /*
+     * Other HTTP validation and authentication
      * errors are real server responses.
      * They must not be retried.
      */
@@ -1036,7 +1055,6 @@ async function invokeEdgeFunction(
     ) {
       return false;
     }
-
     /*
      * Temporary server or gateway failures
      * may succeed on another attempt.
@@ -1052,10 +1070,7 @@ async function invokeEdgeFunction(
         error?.name || ""
       ).toLowerCase();
 
-    const errorMessage =
-      String(
-        error?.message || ""
-      ).toLowerCase();
+    
 
     return (
       errorName.includes(

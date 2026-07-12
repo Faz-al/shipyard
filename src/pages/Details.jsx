@@ -1,4 +1,10 @@
 import {
+  load,
+} from "@cashfreepayments/cashfree-js";
+
+
+
+import {
   useEffect,
   useMemo,
   useState,
@@ -18,38 +24,16 @@ import {
 } from "../components/UI";
 
 import {
+  createCashfreeOrder,
   getProject,
-  invokePayment,
   listMyAssignments,
   reportBug,
   submitCheckin,
   submitFeedback,
-  verifyPayment,
+  verifyCashfreePayment,
 } from "../lib/api";
 
-const loadRazorpay = () =>
-  new Promise((resolve) => {
-    if (window.Razorpay) {
-      resolve(true);
-      return;
-    }
 
-    const script =
-      document.createElement("script");
-
-    script.src =
-      "https://checkout.razorpay.com/v1/checkout.js";
-
-    script.onload = () =>
-      resolve(true);
-
-    script.onerror = () =>
-      resolve(false);
-
-    document.body.appendChild(
-      script
-    );
-  });
 
 function getDuration(project) {
   return (
@@ -224,155 +208,291 @@ export function ProjectDetail() {
     loadProject();
   }, [id]);
 
-  const handlePayment = async () => {
-  if (paymentLoading) {
-    return;
-  }
 
-  try {
-    setPaymentLoading(true);
-    setMessage("");
-    setError("");
+  useEffect(() => {
+  let cancelled = false;
 
-    if (!project?.plan_id) {
-      throw new Error(
-        "This project does not have a valid plan."
-      );
-    }
+  const wait = (milliseconds) =>
+    new Promise((resolve) =>
+      setTimeout(resolve, milliseconds)
+    );
 
-    const loaded =
-      await loadRazorpay();
+  const verifyCashfreeReturn =
+    async () => {
+      const params =
+        new URLSearchParams(
+          window.location.search
+        );
 
-    if (!loaded) {
-      throw new Error(
-        "Could not load Razorpay Checkout. Please check your internet connection and try again."
-      );
-    }
+      const isCashfreeReturn =
+        params.get(
+          "cashfree_return"
+        ) === "true";
 
-    const razorpayKeyId =
-      import.meta.env
-        .VITE_RAZORPAY_KEY_ID;
+      if (!isCashfreeReturn) {
+        return;
+      }
 
-    if (!razorpayKeyId) {
-      throw new Error(
-        "Razorpay is not configured yet."
-      );
-    }
+      const returnedOrderId =
+        params.get("order_id");
 
-    const order =
-      await invokePayment(
-        project.id,
-        project.plan_id
-      );
+      const savedOrderId =
+        sessionStorage.getItem(
+          `shipyard_cashfree_${id}`
+        );
 
-    if (
-      !order?.razorpay_order_id ||
-      !order?.amount
-    ) {
-      throw new Error(
-        "Shipyard could not prepare the payment order."
-      );
-    }
+      const orderId =
+        returnedOrderId ||
+        savedOrderId;
 
-    const razorpay =
-      new window.Razorpay({
-        key: razorpayKeyId,
+      if (!orderId) {
+        setError(
+          "Cashfree returned without an order ID. Please refresh the project before attempting another payment."
+        );
 
-        amount: order.amount,
+        return;
+      }
 
-        currency:
-          order.currency || "INR",
+      try {
+        setPaymentLoading(true);
+        setMessage(
+          "Confirming your Cashfree payment securely…"
+        );
+        setError("");
 
-        name: "Shipyard",
+        let verified = false;
+        let finalError = null;
 
-        description:
-          `${project.app_name} — ${
-            project.plans?.name ||
-            "Testing plan"
-          }`,
-
-        order_id:
-          order.razorpay_order_id,
-
-        theme: {
-          color: "#101828",
-        },
-
-        modal: {
-          confirm_close: true,
-
-          ondismiss: () => {
-            setPaymentLoading(false);
-
-            setError(
-              "Payment was cancelled. Your project is still unpaid, and you can try again whenever you are ready."
-            );
-          },
-        },
-
-        handler: async (
-          response
-        ) => {
+        /*
+         * Verification is safe to retry because
+         * it only checks the existing Cashfree
+         * order and does not create a new charge.
+         */
+        for (
+          let attempt = 1;
+          attempt <= 3;
+          attempt += 1
+        ) {
           try {
-            setMessage(
-              "Payment received. Verifying securely…"
-            );
+            const result =
+              await verifyCashfreePayment({
+                projectId: id,
+                orderId,
+              });
 
-            setError("");
+            if (
+              result?.paid ||
+              result?.alreadyPaid
+            ) {
+              verified = true;
+              break;
+            }
+          } catch (error) {
+            finalError = error;
 
-            await verifyPayment({
-              ...response,
+            if (attempt < 3) {
+              await wait(2000);
+            }
+          }
+        }
 
+        if (!verified) {
+          /*
+           * The webhook may have completed the
+           * payment even when the browser request
+           * failed, so reload the project before
+           * showing an error.
+           */
+          const refreshedProject =
+            await getProject(id);
+
+          if (cancelled) {
+            return;
+          }
+
+          setProject(
+            refreshedProject
+          );
+
+          if (
+            refreshedProject
+              ?.payment_status ===
+            "paid"
+          ) {
+            verified = true;
+          }
+        }
+
+        if (verified) {
+          sessionStorage.removeItem(
+            `shipyard_cashfree_${id}`
+          );
+
+          setError("");
+
+          setMessage(
+            "Cashfree payment verified successfully. Tester recruitment can now begin."
+          );
+
+          await loadProject();
+
+          return;
+        }
+
+        throw (
+          finalError ||
+          new Error(
+            "Your payment confirmation is still being processed."
+          )
+        );
+      } catch (error) {
+        setMessage("");
+
+        setError(
+          "We could not confirm the payment from this browser yet. Do not pay again. Refresh this project after a few seconds while Cashfree's webhook completes verification."
+        );
+      } finally {
+        if (!cancelled) {
+          setPaymentLoading(false);
+        }
+
+        window.history.replaceState(
+          {},
+          "",
+          `/projects/${id}`
+        );
+      }
+    };
+
+  verifyCashfreeReturn();
+
+  return () => {
+    cancelled = true;
+  };
+}, [id]);
+
+
+
+
+
+ 
+
+
+
+const handleCashfreePayment =
+  async () => {
+    if (paymentLoading) {
+      return;
+    }
+
+    try {
+      setPaymentLoading(true);
+      setMessage("");
+      setError("");
+
+      /*
+       * Never immediately create another
+       * Cashfree order when this project
+       * already has one awaiting confirmation.
+       */
+      if (
+        project.payment_provider ===
+          "cashfree" &&
+        project.provider_order_id &&
+        project.payment_status ===
+          "pending"
+      ) {
+        setMessage(
+          "Checking your previous Cashfree payment before creating another order…"
+        );
+
+        try {
+          const result =
+            await verifyCashfreePayment({
               projectId:
                 project.id,
+
+              orderId:
+                project.provider_order_id,
             });
 
+          if (
+            result?.paid ||
+            result?.alreadyPaid
+          ) {
             setMessage(
-              "Payment verified successfully. Tester recruitment can now begin."
+              "Cashfree payment verified successfully. Tester recruitment can now begin."
             );
 
             await loadProject();
-          } catch (
-            verificationError
-          ) {
-            setMessage("");
-
-            setError(
-              verificationError.message ||
-                "Payment was received, but Shipyard could not verify it. Please contact support before paying again."
-            );
-          } finally {
-            setPaymentLoading(false);
+            return;
           }
-        },
-      });
+        } catch {
+          /*
+           * The previous order is not paid.
+           * It is safe to continue with a
+           * fresh Cashfree checkout.
+           */
+        }
 
-    razorpay.on(
-      "payment.failed",
-      (response) => {
-        setPaymentLoading(false);
+        setMessage("");
+      }
 
-        const paymentError =
-          response?.error;
+           const order =
+        await createCashfreeOrder(
+          project.id
+        );
 
-        setError(
-          paymentError?.description ||
-            paymentError?.reason ||
-            "The payment failed. No successful payment was recorded, so you can try again."
+        
+      if (
+        !order?.paymentSessionId ||
+        !order?.orderId
+      ) {
+        throw new Error(
+          "Shipyard could not prepare the Cashfree payment."
         );
       }
-    );
 
-    razorpay.open();
-  } catch (err) {
-    setPaymentLoading(false);
+      const cashfree =
+        await load({
+          mode:
+            order.environment ===
+            "production"
+              ? "production"
+              : "sandbox",
+        });
 
-    setError(
-      err.message ||
-        "Payment could not be started."
-    );
-  }
-};
+      if (!cashfree) {
+        throw new Error(
+          "Cashfree Checkout could not be loaded."
+        );
+      }
+
+      sessionStorage.setItem(
+        `shipyard_cashfree_${project.id}`,
+        order.orderId
+      );
+
+      await cashfree.checkout({
+        paymentSessionId:
+          order.paymentSessionId,
+
+        redirectTarget:
+          "_self",
+      });
+    } catch (error) {
+      setPaymentLoading(false);
+
+      setError(
+        error.message ||
+          "Cashfree payment could not be started. Please try again."
+      );
+    }
+  };
+
+
+
+
 
   const metrics = useMemo(() => {
     if (!project) {
@@ -630,17 +750,17 @@ export function ProjectDetail() {
     </div>
 
     <button
-      type="button"
-      className="button"
-      disabled={paymentLoading}
-      onClick={handlePayment}
-    >
-      {paymentLoading
-        ? "Opening secure checkout…"
-        : `Pay ₹${
-            plan.price_inr ?? ""
-          } securely`}
-    </button>
+  type="button"
+  className="button"
+  disabled={paymentLoading}
+  onClick={handleCashfreePayment}
+>
+  {paymentLoading
+    ? "Opening secure checkout…"
+    : `Pay ₹${
+        plan.price_inr ?? ""
+      } securely`}
+</button>
   </div>
 )}
 
@@ -732,24 +852,24 @@ export function ProjectDetail() {
   {project.payment_status !==
   "paid" ? (
     <>
-      <button
-        type="button"
-        className="button wide"
-        disabled={paymentLoading}
-        onClick={handlePayment}
-      >
-        {paymentLoading
-          ? "Opening secure checkout…"
-          : `Pay ₹${
-              plan.price_inr ?? ""
-            } securely`}
-      </button>
+     <button
+  type="button"
+  className="button wide"
+  disabled={paymentLoading}
+  onClick={handleCashfreePayment}
+>
+  {paymentLoading
+    ? "Opening secure checkout…"
+    : `Pay ₹${
+        plan.price_inr ?? ""
+      } securely`}
+</button>
 
-      <small className="payment-security-note">
-        Secure payment powered by
-        Razorpay. Recruitment begins
-        only after server verification.
-      </small>
+<small className="payment-security-note">
+  Secure payment powered by Cashfree.
+  Recruitment begins only after
+  secure server verification.
+</small>
     </>
   ) : (
     <div className="payment-verified-panel">

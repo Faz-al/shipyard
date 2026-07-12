@@ -1003,37 +1003,281 @@ export async function getProofSignedUrl(
   return data.signedUrl;
 }
 
-export async function invokePayment(
-  projectId,
-  planId
-) {
-  assertConfigured();
+// =========================================================
+// PAYMENT GATEWAYS
+// =========================================================
 
-  return unwrap(
-    await supabase.functions.invoke(
-      "create-razorpay-order",
-      {
-        body: {
-          projectId,
-          planId,
-        },
-      }
-    )
-  );
-}
-
-export async function verifyPayment(
+async function invokeEdgeFunction(
+  functionName,
   body
 ) {
   assertConfigured();
 
-  return unwrap(
-    await supabase.functions.invoke(
-      "verify-razorpay-payment",
-      {
-        body,
+  const maximumAttempts = 3;
+
+  const wait = (milliseconds) =>
+    new Promise((resolve) =>
+      setTimeout(resolve, milliseconds)
+    );
+
+  const isTemporaryConnectionError = ({
+    error,
+    status,
+  }) => {
+    /*
+     * HTTP validation and authentication
+     * errors are real server responses.
+     * They must not be retried.
+     */
+    if (
+      Number.isFinite(status) &&
+      status >= 400 &&
+      status < 500
+    ) {
+      return false;
+    }
+
+    /*
+     * Temporary server or gateway failures
+     * may succeed on another attempt.
+     */
+    if (
+      [502, 503, 504].includes(status)
+    ) {
+      return true;
+    }
+
+    const errorName =
+      String(
+        error?.name || ""
+      ).toLowerCase();
+
+    const errorMessage =
+      String(
+        error?.message || ""
+      ).toLowerCase();
+
+    return (
+      errorName.includes(
+        "functionsfetcherror"
+      ) ||
+      errorName.includes(
+        "aborterror"
+      ) ||
+      errorMessage.includes(
+        "failed to send a request to the edge function"
+      ) ||
+      errorMessage.includes(
+        "failed to fetch"
+      ) ||
+      errorMessage.includes(
+        "fetch failed"
+      ) ||
+      errorMessage.includes(
+        "networkerror"
+      ) ||
+      errorMessage.includes(
+        "network error"
+      ) ||
+      errorMessage.includes(
+        "load failed"
+      ) ||
+      errorMessage.includes(
+        "connection"
+      ) ||
+      errorMessage.includes(
+        "timeout"
+      ) ||
+      errorMessage.includes(
+        "timed out"
+      )
+    );
+  };
+
+  let lastTemporaryError = null;
+
+  for (
+    let attempt = 1;
+    attempt <= maximumAttempts;
+    attempt += 1
+  ) {
+    const {
+      data,
+      error,
+    } =
+      await supabase.functions.invoke(
+        functionName,
+        {
+          body,
+        }
+      );
+
+    if (!error) {
+      /*
+       * An error returned inside valid
+       * function data is a real application
+       * or validation error. Do not retry it.
+       */
+      if (data?.error) {
+        throw new Error(
+          data.error
+        );
       }
-    )
+
+      return data;
+    }
+
+    let message =
+      error.message ||
+      "The payment request failed.";
+
+    let status =
+      error.context?.status ||
+      error.status ||
+      null;
+
+    try {
+      const errorBody =
+        await error.context?.json();
+
+      if (errorBody?.error) {
+        message =
+          errorBody.error;
+      } else if (
+        errorBody?.message
+      ) {
+        message =
+          errorBody.message;
+      }
+
+      status =
+        error.context?.status ||
+        errorBody?.status ||
+        status;
+    } catch {
+      /*
+       * Connection failures often do not
+       * contain a readable JSON response.
+       */
+    }
+
+    const shouldRetry =
+      isTemporaryConnectionError({
+        error,
+        status:
+          status === null
+            ? null
+            : Number(status),
+      });
+
+    /*
+     * Unauthorized, invalid project,
+     * already-paid, amount mismatch and
+     * other real Edge Function responses
+     * reach this branch without retrying.
+     */
+    if (!shouldRetry) {
+      throw new Error(message);
+    }
+
+    lastTemporaryError =
+      error;
+
+    if (
+      attempt < maximumAttempts
+    ) {
+      const retryDelay =
+        attempt === 1
+          ? 800
+          : 1600;
+
+      await wait(retryDelay);
+    }
+  }
+
+  console.error(
+    `Edge Function "${functionName}" could not be reached after ${maximumAttempts} attempts.`,
+    lastTemporaryError
+  );
+
+  throw new Error(
+    "We could not connect to the secure payment service. Please check your connection and try again."
+  );
+}
+
+
+// =========================================================
+// RAZORPAY
+// =========================================================
+
+export async function invokePayment(
+  projectId,
+  planId
+) {
+  return invokeEdgeFunction(
+    "create-razorpay-order",
+    {
+      projectId,
+      planId,
+    }
+  );
+}
+
+
+export async function verifyPayment(
+  body
+) {
+  return invokeEdgeFunction(
+    "verify-razorpay-payment",
+    body
+  );
+}
+
+
+// =========================================================
+// CASHFREE
+// =========================================================
+
+export async function createCashfreeOrder(
+  projectId
+) {
+  if (!projectId) {
+    throw new Error(
+      "Project ID is required."
+    );
+  }
+
+  return invokeEdgeFunction(
+    "create-cashfree-order",
+    {
+      projectId,
+    }
+  );
+}
+
+
+export async function verifyCashfreePayment({
+  projectId,
+  orderId,
+}) {
+  if (!projectId) {
+    throw new Error(
+      "Project ID is required."
+    );
+  }
+
+  if (!orderId) {
+    throw new Error(
+      "Cashfree order ID is required."
+    );
+  }
+
+  return invokeEdgeFunction(
+    "verify-cashfree-payment",
+    {
+      projectId,
+      orderId,
+    }
   );
 }
 

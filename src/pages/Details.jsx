@@ -15,6 +15,12 @@ import {
   useParams,
 } from "react-router-dom";
 
+
+import {
+  Pencil,
+} from "lucide-react";
+
+
 import {
   Badge,
   Card,
@@ -22,6 +28,10 @@ import {
   Empty,
   PageHead,
 } from "../components/UI";
+
+import {
+  useAuth,
+} from "../context/AuthContext";
 
 import {
   createCashfreeOrder,
@@ -211,6 +221,9 @@ function AppIcon({
 
 export function ProjectDetail() {
   const { id } = useParams();
+
+    const { profile } =
+    useAuth();
 
   const [project, setProject] =
     useState(null);
@@ -711,6 +724,13 @@ const handleCashfreePayment =
     );
   }
 
+
+    const isDeveloperView =
+    profile?.is_developer &&
+    project.developer_id ===
+      profile.id;
+
+
   const plan =
     project.plans || {};
 
@@ -746,17 +766,33 @@ const handleCashfreePayment =
         description={
           project.package_name
         }
-        action={
-          <Badge
-            tone={statusTone(
-              project.status
+                action={
+          <div className="project-head-actions">
+            {isDeveloperView && (
+              <Link
+                className="button secondary"
+                to={`/projects/${project.id}/edit`}
+              >
+                <Pencil size={17} />
+
+                {project.payment_status ===
+                "paid"
+                  ? "Edit or request correction"
+                  : "Edit project"}
+              </Link>
             )}
-          >
-            {project.status.replaceAll(
-              "_",
-              " "
-            )}
-          </Badge>
+
+            <Badge
+              tone={statusTone(
+                project.status
+              )}
+            >
+              {project.status.replaceAll(
+                "_",
+                " "
+              )}
+            </Badge>
+          </div>
         }
       />
 

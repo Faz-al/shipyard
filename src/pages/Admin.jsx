@@ -42,11 +42,13 @@ import {
   adminApproveReward,
   adminCancelReward,
   adminCompleteProject,
+  adminListProjectCorrections,
   adminMarkRewardPaid,
   adminPendingCheckins,
   adminProjectAssignments,
   adminProjects,
   adminRemoveAssignment,
+  adminReviewProjectCorrection,
   adminRewardStats,
   adminRewards,
   adminReviewCheckin,
@@ -125,6 +127,305 @@ function statusTone(status) {
 
   return "default";
 }
+
+const PROJECT_FIELD_LABELS = {
+  app_name: "App name",
+  package_name: "Package name",
+  customer_phone: "Mobile number",
+  description: "Testing brief",
+  google_group_url:
+    "Google Group URL",
+  android_opt_in_url:
+    "Android opt-in URL",
+  web_opt_in_url:
+    "Web opt-in URL",
+  app_logo_path: "App logo",
+  app_logo_url: "App logo",
+};
+
+function getCorrectionFields(
+  changes
+) {
+  return Object.entries(
+    changes || {}
+  ).filter(
+    ([field]) =>
+      field !==
+      "app_logo_path"
+  );
+}
+
+function formatCorrectionValue(
+  field,
+  value
+) {
+  if (
+    field === "app_logo_url"
+  ) {
+    return value
+      ? "New logo uploaded"
+      : "Remove current logo";
+  }
+
+  if (
+    value === null ||
+    value === undefined ||
+    value === ""
+  ) {
+    return "Empty";
+  }
+
+  return String(value);
+}
+
+
+
+function ProjectCorrectionsPanel({
+  items,
+  loading,
+  reviewingId,
+  onApprove,
+  onReject,
+  onRefresh,
+}) {
+  const visibleItems =
+    Array.isArray(items)
+      ? items
+      : [];
+
+  return (
+    <Card>
+      <div className="card-head">
+        <div>
+          <h2>
+            Project correction requests
+          </h2>
+
+          <p>
+            Review important app-detail
+            changes before they are shown
+            to assigned testers.
+          </p>
+        </div>
+
+        <button
+          type="button"
+          className="button secondary"
+          disabled={loading}
+          onClick={onRefresh}
+        >
+          <RefreshCw size={17} />
+          Refresh
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="full-loader inline-loader">
+          <LoaderCircle
+            className="spin"
+          />
+
+          Loading correction requests…
+        </div>
+      ) : visibleItems.length ? (
+        <div className="correction-request-list">
+          {visibleItems.map(
+            (request) => {
+              const project =
+                request.project || {};
+
+              const developer =
+                request.developer || {};
+
+              const fields =
+                getCorrectionFields(
+                  request.requested_changes
+                );
+
+              const busy =
+                reviewingId ===
+                request.id;
+
+              return (
+                <article
+                  key={request.id}
+                  className="correction-request-card"
+                >
+                  <div className="correction-request-head">
+                    <div className="app-icon">
+                      {project.app_logo_url ? (
+                        <img
+                          src={
+                            project.app_logo_url
+                          }
+                          alt={`${project.app_name || "App"} logo`}
+                        />
+                      ) : (
+                        project.app_name?.[0]
+                          ?.toUpperCase() ||
+                        "A"
+                      )}
+                    </div>
+
+                    <div className="grow">
+                      <strong>
+                        {project.app_name ||
+                          "Unknown project"}
+                      </strong>
+
+                      <small>
+                        {project.package_name ||
+                          ""}
+                      </small>
+
+                      <small>
+                        Requested by{" "}
+                        {developer.full_name ||
+                          developer.email ||
+                          "Unknown developer"}
+                      </small>
+                    </div>
+
+                    <Badge>
+                      pending review
+                    </Badge>
+                  </div>
+
+                  <div className="correction-request-meta">
+                    <div>
+                      <span>Requested</span>
+
+                      <strong>
+                        {formatDate(
+                          request.created_at
+                        )}
+                      </strong>
+                    </div>
+
+                    <div>
+                      <span>
+                        Project status
+                      </span>
+
+                      <strong>
+                        {statusLabel(
+                          project.status
+                        )}
+                      </strong>
+                    </div>
+
+                    <div>
+                      <span>
+                        Recruited testers
+                      </span>
+
+                      <strong>
+                        {project.recruited_tester_count ||
+                          0}
+                      </strong>
+                    </div>
+                  </div>
+
+                  <div className="correction-reason">
+                    <span>
+                      Developer’s reason
+                    </span>
+
+                    <p>
+                      {request.reason}
+                    </p>
+                  </div>
+
+                  <div className="correction-changes">
+                    <span className="correction-section-label">
+                      Requested changes
+                    </span>
+
+                    {fields.length ? (
+                      fields.map(
+                        ([
+                          field,
+                          value,
+                        ]) => (
+                          <div
+                            key={field}
+                            className="correction-change-row"
+                          >
+                            <strong>
+                              {PROJECT_FIELD_LABELS[
+                                field
+                              ] || field}
+                            </strong>
+
+                            <p>
+                              {formatCorrectionValue(
+                                field,
+                                value
+                              )}
+                            </p>
+                          </div>
+                        )
+                      )
+                    ) : (
+                      <p>
+                        No readable changes
+                        were provided.
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="correction-request-actions">
+                    <button
+                      type="button"
+                      className="button secondary"
+                      disabled={busy}
+                      onClick={() =>
+                        onReject(request)
+                      }
+                    >
+                      <X size={17} />
+                      Reject
+                    </button>
+
+                    <button
+                      type="button"
+                      className="button"
+                      disabled={busy}
+                      onClick={() =>
+                        onApprove(request)
+                      }
+                    >
+                      {busy ? (
+                        <LoaderCircle
+                          className="spin"
+                          size={17}
+                        />
+                      ) : (
+                        <Check size={17} />
+                      )}
+
+                      Approve changes
+                    </button>
+                  </div>
+                </article>
+              );
+            }
+          )}
+        </div>
+      ) : (
+        <Empty
+          title="No pending corrections"
+          body="Developer correction requests will appear here for review."
+        />
+      )}
+    </Card>
+  );
+}
+
+
+
+
+
 
 function PendingEvidenceReview({
   items,
@@ -656,6 +957,14 @@ export function AdminDashboard() {
   const [rewards, setRewards] =
     useState([]);
 
+
+      const [
+    corrections,
+    setCorrections,
+  ] = useState([]);
+
+
+
   const [
     loadingStats,
     setLoadingStats,
@@ -670,6 +979,29 @@ export function AdminDashboard() {
     loadingRewards,
     setLoadingRewards,
   ] = useState(true);
+
+
+    const [
+    loadingCorrections,
+    setLoadingCorrections,
+  ] = useState(true);
+
+  const [
+    reviewingCorrectionId,
+    setReviewingCorrectionId,
+  ] = useState(null);
+
+  const [
+    correctionReview,
+    setCorrectionReview,
+  ] = useState(null);
+
+  const [
+    correctionAdminNote,
+    setCorrectionAdminNote,
+  ] = useState("");
+
+
 
   const [
     reviewingId,
@@ -788,20 +1120,56 @@ const [
     }
   };
 
-  const refreshDashboard = async () => {
-  setError("");
 
-  await Promise.all([
-    loadStats(),
-    loadCheckins(),
-    loadRewards(),
-  ]);
+  const loadCorrections =
+    async () => {
+      try {
+        setLoadingCorrections(
+          true
+        );
 
-  setOperationsRefreshKey(
-    (current) =>
-      current + 1
-  );
-};
+        const data =
+          await adminListProjectCorrections({
+            status: "pending",
+          });
+
+        setCorrections(
+          Array.isArray(data)
+            ? data
+            : []
+        );
+      } catch (err) {
+        setError(
+          err.message ||
+            "Could not load project correction requests."
+        );
+      } finally {
+        setLoadingCorrections(
+          false
+        );
+      }
+    };
+
+
+
+
+
+    const refreshDashboard =
+    async () => {
+      setError("");
+
+      await Promise.all([
+        loadStats(),
+        loadCheckins(),
+        loadRewards(),
+        loadCorrections(),
+      ]);
+
+      setOperationsRefreshKey(
+        (current) =>
+          current + 1
+      );
+    };
 
   useEffect(() => {
     refreshDashboard();
@@ -881,6 +1249,107 @@ const [
         setReviewingId(null);
       }
     };
+
+
+
+      const openCorrectionApproval = (
+    request
+  ) => {
+    setCorrectionReview({
+      request,
+      approve: true,
+    });
+
+    setCorrectionAdminNote("");
+    setError("");
+    setMessage("");
+  };
+
+  const openCorrectionRejection = (
+    request
+  ) => {
+    setCorrectionReview({
+      request,
+      approve: false,
+    });
+
+    setCorrectionAdminNote("");
+    setError("");
+    setMessage("");
+  };
+
+  const confirmCorrectionReview =
+    async () => {
+      if (!correctionReview) {
+        return;
+      }
+
+      if (
+        !correctionReview.approve &&
+        correctionAdminNote.trim()
+          .length < 5
+      ) {
+        setError(
+          "Please explain why the correction request is being rejected."
+        );
+
+        return;
+      }
+
+      const request =
+        correctionReview.request;
+
+      try {
+        setReviewingCorrectionId(
+          request.id
+        );
+
+        setError("");
+        setMessage("");
+
+        await adminReviewProjectCorrection({
+          requestId:
+            request.id,
+
+          approve:
+            correctionReview.approve,
+
+          adminNote:
+            correctionAdminNote,
+        });
+
+        setMessage(
+          correctionReview.approve
+            ? `Changes to ${
+                request.project
+                  ?.app_name ||
+                "the project"
+              } were approved. Assigned testers were notified.`
+            : `The correction request for ${
+                request.project
+                  ?.app_name ||
+                "the project"
+              } was rejected.`
+        );
+
+        setCorrectionReview(null);
+        setCorrectionAdminNote("");
+
+        await refreshDashboard();
+      } catch (err) {
+        setError(
+          err.message ||
+            "The correction request could not be reviewed."
+        );
+      } finally {
+        setReviewingCorrectionId(
+          null
+        );
+      }
+    };
+
+
+
 
   const openProof = async (
     checkin
@@ -1011,6 +1480,64 @@ const confirmRewardPaid =
   };
 
 
+  const confirmCancelReward =
+  async () => {
+    if (
+      !rewardCancellation ||
+      !cancellationReason.trim()
+    ) {
+      return;
+    }
+
+    try {
+      setChangingRewardId(
+        rewardCancellation.id
+      );
+
+      setMessage("");
+      setError("");
+
+      await adminCancelReward({
+        assignmentId:
+          rewardCancellation.id,
+
+        reason:
+          cancellationReason.trim(),
+      });
+
+      setMessage(
+        `Reward for ${
+          rewardCancellation.tester
+            ?.full_name ||
+          "the tester"
+        } was cancelled.`
+      );
+
+      setRewardCancellation(
+        null
+      );
+
+      setCancellationReason(
+        ""
+      );
+
+      await refreshDashboard();
+    } catch (err) {
+      setError(
+        err.message ||
+          "The reward could not be cancelled."
+      );
+    } finally {
+      setChangingRewardId(
+        null
+      );
+    }
+  };
+
+
+
+
+
   return (
     <DashboardLayout>
       <PageHead
@@ -1087,6 +1614,25 @@ const confirmRewardPaid =
 
 <TesterPayoutDirectory />
 
+<ProjectCorrectionsPanel
+  items={corrections}
+  loading={
+    loadingCorrections
+  }
+  reviewingId={
+    reviewingCorrectionId
+  }
+  onApprove={
+    openCorrectionApproval
+  }
+  onReject={
+    openCorrectionRejection
+  }
+  onRefresh={
+    refreshDashboard
+  }
+/>
+
 <PendingEvidenceReview
         items={checkins}
         loading={loadingCheckins}
@@ -1119,6 +1665,165 @@ const confirmRewardPaid =
         }}
         onRefresh={refreshDashboard}
       />
+
+
+
+            {correctionReview && (
+        <div className="modal-backdrop">
+          <div className="modal-card correction-review-modal">
+            <div className="modal-head">
+              <div>
+                <span className="eyebrow">
+                  {correctionReview.approve
+                    ? "Approve correction"
+                    : "Reject correction"}
+                </span>
+
+                <h2>
+                  {correctionReview.request
+                    .project?.app_name ||
+                    "Project correction"}
+                </h2>
+              </div>
+
+              <button
+                type="button"
+                className="icon-button"
+                disabled={Boolean(
+                  reviewingCorrectionId
+                )}
+                onClick={() => {
+                  setCorrectionReview(
+                    null
+                  );
+
+                  setCorrectionAdminNote(
+                    ""
+                  );
+                }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <p className="modal-description">
+              {correctionReview.approve
+                ? "The requested fields will be updated immediately. Every active assigned tester will receive a notification."
+                : "The project will remain unchanged. Explain what the developer must correct before requesting again."}
+            </p>
+
+            <div className="correction-modal-summary">
+              {getCorrectionFields(
+                correctionReview.request
+                  .requested_changes
+              ).map(
+                ([
+                  field,
+                  value,
+                ]) => (
+                  <div key={field}>
+                    <span>
+                      {PROJECT_FIELD_LABELS[
+                        field
+                      ] || field}
+                    </span>
+
+                    <strong>
+                      {formatCorrectionValue(
+                        field,
+                        value
+                      )}
+                    </strong>
+                  </div>
+                )
+              )}
+            </div>
+
+            <label>
+              {correctionReview.approve
+                ? "Admin note (optional)"
+                : "Rejection reason"}
+
+              <textarea
+                rows="5"
+                autoFocus
+                value={
+                  correctionAdminNote
+                }
+                placeholder={
+                  correctionReview.approve
+                    ? "Add an internal note about this approval."
+                    : "Explain why this request cannot be approved."
+                }
+                onChange={(event) =>
+                  setCorrectionAdminNote(
+                    event.target.value
+                  )
+                }
+              />
+            </label>
+
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="button secondary"
+                disabled={Boolean(
+                  reviewingCorrectionId
+                )}
+                onClick={() => {
+                  setCorrectionReview(
+                    null
+                  );
+
+                  setCorrectionAdminNote(
+                    ""
+                  );
+                }}
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                className={
+                  correctionReview.approve
+                    ? "button"
+                    : "button danger"
+                }
+                disabled={
+                  Boolean(
+                    reviewingCorrectionId
+                  ) ||
+                  (
+                    !correctionReview.approve &&
+                    correctionAdminNote.trim()
+                      .length < 5
+                  )
+                }
+                onClick={
+                  confirmCorrectionReview
+                }
+              >
+                {reviewingCorrectionId ? (
+                  <LoaderCircle
+                    className="spin"
+                    size={17}
+                  />
+                ) : correctionReview.approve ? (
+                  <Check size={17} />
+                ) : (
+                  <X size={17} />
+                )}
+
+                {correctionReview.approve
+                  ? "Approve correction"
+                  : "Reject correction"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
 
 
 

@@ -463,6 +463,724 @@ export async function createProject(
   return data;
 }
 
+
+
+
+// =========================================================
+// PROJECT EDITING AND CORRECTION WORKFLOW
+// =========================================================
+
+function cleanProjectPhone(value) {
+  return String(value || "")
+    .replace(/\D/g, "")
+    .replace(
+      /^91(?=\d{10}$)/,
+      ""
+    );
+}
+
+function cleanProjectPackage(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase();
+}
+
+function validateProjectLogo(file) {
+  if (!file) {
+    return;
+  }
+
+  const allowedTypes = [
+    "image/png",
+    "image/jpeg",
+    "image/webp",
+  ];
+
+  if (
+    !allowedTypes.includes(
+      file.type
+    )
+  ) {
+    throw new Error(
+      "Please upload a PNG, JPG or WebP app logo."
+    );
+  }
+
+  if (
+    file.size >
+    2 * 1024 * 1024
+  ) {
+    throw new Error(
+      "The app logo must be smaller than 2 MB."
+    );
+  }
+}
+
+async function uploadProjectLogo(
+  file
+) {
+  if (!file) {
+    return null;
+  }
+
+  validateProjectLogo(file);
+
+  const user =
+    await getCurrentUser();
+
+  const fileExtension =
+    file.name
+      .split(".")
+      .pop()
+      ?.toLowerCase() ||
+    (
+      file.type ===
+      "image/png"
+        ? "png"
+        : file.type ===
+            "image/webp"
+          ? "webp"
+          : "jpg"
+    );
+
+  const logoPath = [
+    user.id,
+    `${crypto.randomUUID()}.${fileExtension}`,
+  ].join("/");
+
+  const {
+    error: uploadError,
+  } = await supabase.storage
+    .from("app-logos")
+    .upload(
+      logoPath,
+      file,
+      {
+        cacheControl: "3600",
+        upsert: false,
+        contentType:
+          file.type,
+      }
+    );
+
+  if (uploadError) {
+    throw new Error(
+      uploadError.message ||
+        "The app logo could not be uploaded."
+    );
+  }
+
+  const {
+    data: publicUrlData,
+  } = supabase.storage
+    .from("app-logos")
+    .getPublicUrl(
+      logoPath
+    );
+
+  const logoUrl =
+    publicUrlData?.publicUrl ||
+    null;
+
+  if (!logoUrl) {
+    await supabase.storage
+      .from("app-logos")
+      .remove([
+        logoPath,
+      ]);
+
+    throw new Error(
+      "The app logo URL could not be created."
+    );
+  }
+
+  return {
+    path: logoPath,
+    url: logoUrl,
+  };
+}
+
+async function removeUploadedProjectLogo(
+  logoPath
+) {
+  if (!logoPath) {
+    return;
+  }
+
+  const {
+    error,
+  } = await supabase.storage
+    .from("app-logos")
+    .remove([
+      logoPath,
+    ]);
+
+  if (error) {
+    console.warn(
+      "Could not remove unused app logo:",
+      error.message
+    );
+  }
+}
+
+function validateProjectEditChanges(
+  changes
+) {
+  if (
+    Object.prototype.hasOwnProperty.call(
+      changes,
+      "app_name"
+    ) &&
+    !String(
+      changes.app_name || ""
+    ).trim()
+  ) {
+    throw new Error(
+      "Please enter the app name."
+    );
+  }
+
+  if (
+    Object.prototype.hasOwnProperty.call(
+      changes,
+      "package_name"
+    )
+  ) {
+    const packageName =
+      cleanProjectPackage(
+        changes.package_name
+      );
+
+    if (
+      !/^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/.test(
+        packageName
+      )
+    ) {
+      throw new Error(
+        "Please enter a valid package name, such as com.company.app."
+      );
+    }
+  }
+
+  if (
+    Object.prototype.hasOwnProperty.call(
+      changes,
+      "customer_phone"
+    )
+  ) {
+    const phone =
+      cleanProjectPhone(
+        changes.customer_phone
+      );
+
+    if (
+      !/^[6-9]\d{9}$/.test(
+        phone
+      )
+    ) {
+      throw new Error(
+        "Please enter a valid 10-digit Indian mobile number."
+      );
+    }
+  }
+}
+
+function prepareProjectChanges(
+  changes
+) {
+  const prepared = {
+    ...changes,
+  };
+
+  if (
+    Object.prototype.hasOwnProperty.call(
+      prepared,
+      "app_name"
+    )
+  ) {
+    prepared.app_name =
+      String(
+        prepared.app_name || ""
+      ).trim();
+  }
+
+  if (
+    Object.prototype.hasOwnProperty.call(
+      prepared,
+      "package_name"
+    )
+  ) {
+    prepared.package_name =
+      cleanProjectPackage(
+        prepared.package_name
+      );
+  }
+
+  if (
+    Object.prototype.hasOwnProperty.call(
+      prepared,
+      "customer_phone"
+    )
+  ) {
+    prepared.customer_phone =
+      cleanProjectPhone(
+        prepared.customer_phone
+      );
+  }
+
+  [
+    "description",
+    "google_group_url",
+    "android_opt_in_url",
+    "web_opt_in_url",
+  ].forEach((field) => {
+    if (
+      Object.prototype.hasOwnProperty.call(
+        prepared,
+        field
+      )
+    ) {
+      prepared[field] =
+        String(
+          prepared[field] || ""
+        ).trim();
+    }
+  });
+
+  return prepared;
+}
+
+export function getProjectEditMode(
+  project
+) {
+  if (!project) {
+    return "locked";
+  }
+
+  const recruited =
+    Number(
+      project.recruited_tester_count ||
+        project.assignments?.length ||
+        0
+    );
+
+  if (
+    project.status ===
+      "pending_payment" &&
+    [
+      "unpaid",
+      "pending",
+    ].includes(
+      project.payment_status
+    )
+  ) {
+    return "full";
+  }
+
+  if (
+    project.status ===
+      "recruiting" &&
+    project.payment_status ===
+      "paid" &&
+    recruited === 0
+  ) {
+    return "limited";
+  }
+
+  if (
+    project.payment_status ===
+      "paid"
+  ) {
+    return "correction";
+  }
+
+  return "locked";
+}
+
+export async function developerUpdateProject({
+  projectId,
+  changes,
+  appLogoFile = null,
+  removeCurrentLogo = false,
+  currentLogoPath = null,
+}) {
+  assertConfigured();
+
+  if (!projectId) {
+    throw new Error(
+      "Project ID is required."
+    );
+  }
+
+  const preparedChanges =
+    prepareProjectChanges(
+      changes || {}
+    );
+
+  validateProjectEditChanges(
+    preparedChanges
+  );
+
+  let uploadedLogo = null;
+
+  if (appLogoFile) {
+    uploadedLogo =
+      await uploadProjectLogo(
+        appLogoFile
+      );
+
+    preparedChanges.app_logo_path =
+      uploadedLogo.path;
+
+    preparedChanges.app_logo_url =
+      uploadedLogo.url;
+  } else if (removeCurrentLogo) {
+    preparedChanges.app_logo_path =
+      "";
+
+    preparedChanges.app_logo_url =
+      "";
+  }
+
+  if (
+    Object.keys(
+      preparedChanges
+    ).length === 0
+  ) {
+    throw new Error(
+      "No project changes were provided."
+    );
+  }
+
+  try {
+    const updatedProject =
+      unwrap(
+        await supabase.rpc(
+          "developer_update_project",
+          {
+            p_project_id:
+              projectId,
+
+            p_changes:
+              preparedChanges,
+          }
+        )
+      );
+
+    if (
+      uploadedLogo &&
+      currentLogoPath &&
+      currentLogoPath !==
+        uploadedLogo.path
+    ) {
+      await removeUploadedProjectLogo(
+        currentLogoPath
+      );
+    }
+
+    if (
+      removeCurrentLogo &&
+      currentLogoPath
+    ) {
+      await removeUploadedProjectLogo(
+        currentLogoPath
+      );
+    }
+
+    return updatedProject;
+  } catch (error) {
+    if (uploadedLogo?.path) {
+      await removeUploadedProjectLogo(
+        uploadedLogo.path
+      );
+    }
+
+    throw error;
+  }
+}
+
+export async function requestProjectCorrection({
+  projectId,
+  changes,
+  reason,
+  appLogoFile = null,
+}) {
+  assertConfigured();
+
+  if (!projectId) {
+    throw new Error(
+      "Project ID is required."
+    );
+  }
+
+  const preparedChanges =
+    prepareProjectChanges(
+      changes || {}
+    );
+
+  validateProjectEditChanges(
+    preparedChanges
+  );
+
+  const cleanReason =
+    String(reason || "")
+      .trim();
+
+  if (
+    cleanReason.length < 10
+  ) {
+    throw new Error(
+      "Please explain why this correction is required."
+    );
+  }
+
+  let uploadedLogo = null;
+
+  if (appLogoFile) {
+    uploadedLogo =
+      await uploadProjectLogo(
+        appLogoFile
+      );
+
+    preparedChanges.app_logo_path =
+      uploadedLogo.path;
+
+    preparedChanges.app_logo_url =
+      uploadedLogo.url;
+  }
+
+  if (
+    Object.keys(
+      preparedChanges
+    ).length === 0
+  ) {
+    if (uploadedLogo?.path) {
+      await removeUploadedProjectLogo(
+        uploadedLogo.path
+      );
+    }
+
+    throw new Error(
+      "Please include at least one requested change."
+    );
+  }
+
+  try {
+    return unwrap(
+      await supabase.rpc(
+        "request_project_correction",
+        {
+          p_project_id:
+            projectId,
+
+          p_changes:
+            preparedChanges,
+
+          p_reason:
+            cleanReason,
+        }
+      )
+    );
+  } catch (error) {
+    if (uploadedLogo?.path) {
+      await removeUploadedProjectLogo(
+        uploadedLogo.path
+      );
+    }
+
+    throw error;
+  }
+}
+
+export async function listProjectCorrections(
+  projectId
+) {
+  assertConfigured();
+
+  if (!projectId) {
+    return [];
+  }
+
+  return unwrap(
+    await supabase
+      .from(
+        "project_correction_requests"
+      )
+      .select("*")
+      .eq(
+        "project_id",
+        projectId
+      )
+      .order(
+        "created_at",
+        {
+          ascending: false,
+        }
+      )
+  );
+}
+
+export async function getPendingProjectCorrection(
+  projectId
+) {
+  assertConfigured();
+
+  if (!projectId) {
+    return null;
+  }
+
+  const {
+    data,
+    error,
+  } = await supabase
+    .from(
+      "project_correction_requests"
+    )
+    .select("*")
+    .eq(
+      "project_id",
+      projectId
+    )
+    .eq(
+      "status",
+      "pending"
+    )
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  return data || null;
+}
+
+export async function listProjectChangeHistory(
+  projectId
+) {
+  assertConfigured();
+
+  if (!projectId) {
+    return [];
+  }
+
+  return unwrap(
+    await supabase
+      .from(
+        "project_change_history"
+      )
+      .select(`
+        *,
+        actor:profiles!project_change_history_actor_id_fkey(
+          id,
+          full_name,
+          email
+        )
+      `)
+      .eq(
+        "project_id",
+        projectId
+      )
+      .order(
+        "created_at",
+        {
+          ascending: false,
+        }
+      )
+  );
+}
+
+export async function adminListProjectCorrections({
+  status = "pending",
+} = {}) {
+  assertConfigured();
+
+  let query = supabase
+    .from(
+      "project_correction_requests"
+    )
+    .select(`
+      *,
+      project:projects(
+        id,
+        app_name,
+        package_name,
+        app_logo_url,
+        status,
+        payment_status,
+        recruited_tester_count,
+        developer_id
+      ),
+      developer:profiles!project_correction_requests_developer_id_fkey(
+        id,
+        full_name,
+        email
+      ),
+      reviewer:profiles!project_correction_requests_reviewed_by_fkey(
+        id,
+        full_name,
+        email
+      )
+    `)
+    .order(
+      "created_at",
+      {
+        ascending: false,
+      }
+    );
+
+  if (status) {
+    query = query.eq(
+      "status",
+      status
+    );
+  }
+
+  return unwrap(
+    await query
+  );
+}
+
+export async function adminReviewProjectCorrection({
+  requestId,
+  approve,
+  adminNote = "",
+}) {
+  assertConfigured();
+
+  if (!requestId) {
+    throw new Error(
+      "Correction request ID is required."
+    );
+  }
+
+  return unwrap(
+    await supabase.rpc(
+      "admin_review_project_correction",
+      {
+        p_request_id:
+          requestId,
+
+        p_approve:
+          Boolean(approve),
+
+        p_admin_note:
+          String(
+            adminNote || ""
+          ).trim() ||
+          null,
+      }
+    )
+  );
+}
+
+
+
+
+
+
+
+
+
 export async function listPlans() {
   assertConfigured();
 

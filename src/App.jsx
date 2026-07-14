@@ -45,6 +45,12 @@ import {
   Notifications,
 } from "./pages/Notifications";
 
+
+import EditProject
+  from "./pages/EditProject";
+
+
+
 import {
   Protected,
 } from "./components/UI";
@@ -52,6 +58,9 @@ import {
 import {
   useAuth,
 } from "./context/AuthContext";
+
+
+
 
 
 function RoleRedirect() {
@@ -192,6 +201,20 @@ export default function App() {
           </Protected>
         }
       />
+
+
+      <Route
+  path="/projects/:id/edit"
+  element={
+    <Protected
+      roles={["developer"]}
+    >
+      <EditProject />
+    </Protected>
+  }
+/>
+
+
 
       <Route
         path="/new-project"

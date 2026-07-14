@@ -1,0 +1,17 @@
+User-agent: *
+Allow: /
+
+Disallow: /dashboard
+Disallow: /admin
+Disallow: /projects
+Disallow: /assignments
+Disallow: /notifications
+Disallow: /new-project
+Disallow: /available-tests
+Disallow: /enable-tester
+Disallow: /enable-developer
+Disallow: /login
+Disallow: /signup
+Disallow: /forgot-password
+
+Sitemap: https://www.getshipyard.in/sitemap.xml

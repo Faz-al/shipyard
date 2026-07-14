@@ -282,7 +282,7 @@ export default function PayoutMethodCard() {
               </div>
 
               <small>
-                Example: upi@bank
+                Example: name@bank
               </small>
             </label>
 

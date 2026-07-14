@@ -50,6 +50,12 @@ import EditProject
   from "./pages/EditProject";
 
 
+  import {
+  BlogArticle,
+  BlogIndex,
+} from "./pages/Blogs";
+
+
 
 import {
   Protected,
@@ -144,6 +150,22 @@ export default function App() {
     <Legal type="refund" />
   }
 />
+
+
+
+<Route
+  path="/blog"
+  element={<BlogIndex />}
+/>
+
+<Route
+  path="/blog/:slug"
+  element={<BlogArticle />}
+/>
+
+
+
+
 
       <Route
   path="/login"

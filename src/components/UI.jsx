@@ -93,6 +93,10 @@ export function PublicNav() {
           How it works
         </NavLink>
 
+        <NavLink to="/blog">
+  Guides
+</NavLink>
+
         <NavLink to="/pricing">
           Pricing
         </NavLink>

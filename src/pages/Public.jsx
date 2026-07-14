@@ -41,7 +41,7 @@ const SHIPYARD_BUSINESS = {
   operatorName: "Mohammed Fazal",
   supportEmail: "Acidhouseonline@gmail.com",
   website:
-    "https://shipyard-gilt.vercel.app",
+  "https://www.getshipyard.in",
   location: "India",
   supportHours:
     "Monday to Saturday, 10:00 AM to 6:00 PM IST",
@@ -2047,6 +2047,10 @@ function Footer() {
 
         <div className="sy-footer-column">
           <strong>Platform</strong>
+
+          <Link to="/blog">
+  Guides
+</Link>
 
           <Link to="/how-it-works">
             How it works

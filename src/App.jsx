@@ -53,6 +53,7 @@ import EditProject
 
 import {
   Protected,
+  PublicOnly,
 } from "./components/UI";
 
 import {
@@ -88,9 +89,13 @@ export default function App() {
   return (
     <Routes>
       <Route
-        path="/"
-        element={<Home />}
-      />
+  path="/"
+  element={
+    <PublicOnly>
+      <Home />
+    </PublicOnly>
+  }
+/>
 
       <Route
         path="/pricing"
@@ -141,23 +146,31 @@ export default function App() {
 />
 
       <Route
-        path="/login"
-        element={<AuthPage />}
-      />
+  path="/login"
+  element={
+    <PublicOnly>
+      <AuthPage />
+    </PublicOnly>
+  }
+/>
 
       <Route
-        path="/signup"
-        element={
-          <AuthPage mode="signup" />
-        }
-      />
+  path="/signup"
+  element={
+    <PublicOnly>
+      <AuthPage mode="signup" />
+    </PublicOnly>
+  }
+/>
 
-      <Route
-        path="/forgot-password"
-        element={
-          <AuthPage mode="forgot" />
-        }
-      />
+     <Route
+  path="/forgot-password"
+  element={
+    <PublicOnly>
+      <AuthPage mode="forgot" />
+    </PublicOnly>
+  }
+/>
 
       <Route
         path="/dashboard"

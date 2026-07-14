@@ -610,6 +610,51 @@ export function NotificationBell() {
 }
 
 export function Protected({children,roles}){const {user,profile,loading,isConfigured}=useAuth();if(!isConfigured)return <SetupRequired/>;if(loading)return <FullLoader/>;if(!user)return <Navigate to="/login" replace/>;if(!profile)return <FullLoader/>;const access={developer:profile.is_developer||profile.is_admin,tester:profile.is_tester,admin:profile.is_admin};if(roles&&!roles.some(role=>access[role]))return <Navigate to="/dashboard" replace/>;return children;}
+
+
+export function PublicOnly({
+  children,
+}) {
+  const {
+    user,
+    profile,
+    loading,
+    isConfigured,
+  } = useAuth();
+
+  if (!isConfigured) {
+    return <SetupRequired />;
+  }
+
+  if (loading) {
+    return <FullLoader />;
+  }
+
+  if (!user) {
+    return children;
+  }
+
+  if (!profile) {
+    return <FullLoader />;
+  }
+
+  const destination =
+    profile.preferred_workspace ===
+        "admin" &&
+      profile.is_admin
+      ? "/admin"
+      : "/dashboard";
+
+  return (
+    <Navigate
+      to={destination}
+      replace
+    />
+  );
+}
+
+
+
 export function DashboardLayout({
   children,
 }) {

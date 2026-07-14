@@ -209,7 +209,10 @@ export async function getProject(id) {
   return project;
 }
 
-export async function createProject(payload) {
+export async function createProject(
+  payload,
+  appLogoFile = null
+) {
   const user = await getCurrentUser();
 
   const cleanPackageName =
@@ -255,6 +258,105 @@ export async function createProject(payload) {
     );
   }
 
+  let appLogoPath = null;
+  let appLogoUrl = null;
+
+  if (appLogoFile) {
+    const allowedTypes = [
+      "image/png",
+      "image/jpeg",
+      "image/webp",
+    ];
+
+    if (
+      !allowedTypes.includes(
+        appLogoFile.type
+      )
+    ) {
+      throw new Error(
+        "Please upload a PNG, JPG or WebP app logo."
+      );
+    }
+
+    const maximumSize =
+      2 * 1024 * 1024;
+
+    if (
+      appLogoFile.size >
+      maximumSize
+    ) {
+      throw new Error(
+        "The app logo must be smaller than 2 MB."
+      );
+    }
+
+    const extension =
+      appLogoFile.name
+        .split(".")
+        .pop()
+        ?.toLowerCase() ||
+      (
+        appLogoFile.type ===
+        "image/png"
+          ? "png"
+          : appLogoFile.type ===
+              "image/webp"
+            ? "webp"
+            : "jpg"
+      );
+
+    appLogoPath = [
+      user.id,
+      `${crypto.randomUUID()}.${extension}`,
+    ].join("/");
+
+    const {
+      error: logoUploadError,
+    } = await supabase.storage
+      .from("app-logos")
+      .upload(
+        appLogoPath,
+        appLogoFile,
+        {
+          cacheControl: "3600",
+          upsert: false,
+          contentType:
+            appLogoFile.type,
+        }
+      );
+
+    if (logoUploadError) {
+      throw new Error(
+        logoUploadError.message ||
+          "The app logo could not be uploaded."
+      );
+    }
+
+    const {
+      data: publicUrlData,
+    } = supabase.storage
+      .from("app-logos")
+      .getPublicUrl(
+        appLogoPath
+      );
+
+    appLogoUrl =
+      publicUrlData?.publicUrl ||
+      null;
+
+    if (!appLogoUrl) {
+      await supabase.storage
+        .from("app-logos")
+        .remove([
+          appLogoPath,
+        ]);
+
+      throw new Error(
+        "The app logo URL could not be created."
+      );
+    }
+  }
+
   const {
     data,
     error,
@@ -297,6 +399,12 @@ export async function createProject(payload) {
             ""
         ).trim(),
 
+      app_logo_path:
+        appLogoPath,
+
+      app_logo_url:
+        appLogoUrl,
+
       developer_id:
         user.id,
 
@@ -312,16 +420,24 @@ export async function createProject(payload) {
     .single();
 
   if (error) {
+    if (appLogoPath) {
+      await supabase.storage
+        .from("app-logos")
+        .remove([
+          appLogoPath,
+        ]);
+    }
+
     const message =
       String(
         error.message || ""
       ).toLowerCase();
 
     if (
-  message.includes(
-    "projects_active_package_idx"
-  )
-) {
+      message.includes(
+        "projects_active_package_idx"
+      )
+    ) {
       throw new Error(
         "An active test already exists for this package name. Complete or cancel the existing test before creating another one."
       );

@@ -150,6 +150,46 @@ function projectStatusTone(status) {
   return "default";
 }
 
+function AppIcon({
+  project,
+  large = false,
+}) {
+  const [imageFailed, setImageFailed] =
+    useState(false);
+
+  const className =
+    large
+      ? "app-icon large"
+      : "app-icon";
+
+  if (
+    project?.app_logo_url &&
+    !imageFailed
+  ) {
+    return (
+      <div className={className}>
+        <img
+          src={project.app_logo_url}
+          alt={`${project.app_name || "App"} logo`}
+          loading="lazy"
+          onError={() =>
+            setImageFailed(true)
+          }
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className={className}>
+      {project?.app_name?.[0]
+        ?.toUpperCase() ||
+        "A"}
+    </div>
+  );
+}
+
+
 export function Dashboard() {
   const { profile } = useAuth();
 
@@ -376,10 +416,7 @@ function DeveloperDashboard() {
                     key={project.id}
                     to={`/projects/${project.id}`}
                   >
-                    <div className="app-icon">
-                      {project.app_name?.[0]?.toUpperCase() ||
-                        "A"}
-                    </div>
+                    <AppIcon project={project} />
 
                     <div className="grow">
                       <strong>
@@ -623,10 +660,7 @@ function TesterDashboard() {
                     key={assignment.id}
                     to={`/assignments/${assignment.id}`}
                   >
-                    <div className="app-icon">
-                      {project?.app_name?.[0]?.toUpperCase() ||
-                        "A"}
-                    </div>
+                    <AppIcon project={project} />
 
                     <div className="grow">
                       <strong>
@@ -881,6 +915,22 @@ export function NewProject() {
     setSubmitting,
   ] = useState(false);
 
+
+
+      const [
+    appLogoFile,
+    setAppLogoFile,
+  ] = useState(null);
+
+  const [
+    appLogoPreview,
+    setAppLogoPreview,
+  ] = useState("");
+
+
+
+
+
    const [form, setForm] =
     useState({
       app_name: "",
@@ -961,28 +1011,106 @@ export function NewProject() {
     }));
   };
 
-   const submit = async (event) => {
-  event.preventDefault();
 
-  try {
-    setSubmitting(true);
+
+    const selectAppLogo = (
+    event
+  ) => {
+    const file =
+      event.target.files?.[0] ||
+      null;
+
+    if (!file) {
+      setAppLogoFile(null);
+      setAppLogoPreview("");
+      return;
+    }
+
+    const allowedTypes = [
+      "image/png",
+      "image/jpeg",
+      "image/webp",
+    ];
+
+    if (
+      !allowedTypes.includes(
+        file.type
+      )
+    ) {
+      event.target.value = "";
+
+      setAppLogoFile(null);
+      setAppLogoPreview("");
+
+      setError(
+        "Please upload a PNG, JPG or WebP app logo."
+      );
+
+      return;
+    }
+
+    if (
+      file.size >
+      2 * 1024 * 1024
+    ) {
+      event.target.value = "";
+
+      setAppLogoFile(null);
+      setAppLogoPreview("");
+
+      setError(
+        "The app logo must be smaller than 2 MB."
+      );
+
+      return;
+    }
+
     setError("");
+    setAppLogoFile(file);
 
-    const project =
-      await createProject(form);
+    const reader =
+      new FileReader();
 
-    navigate(
-      `/projects/${project.id}`
-    );
-  } catch (err) {
-    setError(
-      err.message ||
-        "The project could not be created."
-    );
-  } finally {
-    setSubmitting(false);
-  }
-};
+    reader.onload = () => {
+      setAppLogoPreview(
+        typeof reader.result ===
+          "string"
+          ? reader.result
+          : ""
+      );
+    };
+
+    reader.readAsDataURL(file);
+  };
+
+
+
+
+     const submit = async (event) => {
+    event.preventDefault();
+
+    try {
+      setSubmitting(true);
+      setError("");
+
+      const project =
+        await createProject(
+          form,
+          appLogoFile
+        );
+
+      navigate(
+        `/projects/${project.id}`
+      );
+    } catch (err) {
+      setError(
+        err.message ||
+          "The project could not be created."
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
 
   return (
@@ -1058,6 +1186,59 @@ export function NewProject() {
               }
             />
           </label>     
+
+                    <label className="full">
+            App logo
+
+            <div className="app-logo-upload">
+              <div className="app-logo-upload-preview">
+                {appLogoPreview ? (
+                  <img
+                    src={appLogoPreview}
+                    alt="Selected app logo preview"
+                  />
+                ) : (
+                  <span>
+                    {form.app_name?.[0]
+                      ?.toUpperCase() ||
+                      "A"}
+                  </span>
+                )}
+              </div>
+
+              <div className="app-logo-upload-copy">
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  onChange={
+                    selectAppLogo
+                  }
+                />
+
+                <small>
+                  Upload a square PNG, JPG or WebP logo. Maximum size: 2 MB.
+                </small>
+
+                {appLogoFile && (
+                  <button
+                    type="button"
+                    className="app-logo-remove"
+                    onClick={() => {
+                      setAppLogoFile(
+                        null
+                      );
+
+                      setAppLogoPreview(
+                        ""
+                      );
+                    }}
+                  >
+                    Remove selected logo
+                  </button>
+                )}
+              </div>
+            </div>
+          </label>
 
 
 
@@ -1330,10 +1511,10 @@ export function AvailableTests() {
         <div className="market-grid">
           {items.map((project) => (
             <Card key={project.id}>
-              <div className="app-icon large">
-                {project.app_name?.[0]?.toUpperCase() ||
-                  "A"}
-              </div>
+              <AppIcon
+  project={project}
+  large
+/>
 
               <div className="badge-row">
                 <Badge>

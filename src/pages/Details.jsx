@@ -165,6 +165,50 @@ function statusTone(status) {
   return "default";
 }
 
+
+
+function AppIcon({
+  project,
+  large = false,
+}) {
+  const [imageFailed, setImageFailed] =
+    useState(false);
+
+  const className =
+    large
+      ? "app-icon large"
+      : "app-icon";
+
+  if (
+    project?.app_logo_url &&
+    !imageFailed
+  ) {
+    return (
+      <div className={className}>
+        <img
+          src={project.app_logo_url}
+          alt={`${project.app_name || "App"} logo`}
+          loading="lazy"
+          onError={() =>
+            setImageFailed(true)
+          }
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className={className}>
+      {project?.app_name?.[0]
+        ?.toUpperCase() ||
+        "A"}
+    </div>
+  );
+}
+
+
+
+
 export function ProjectDetail() {
   const { id } = useParams();
 
@@ -1326,12 +1370,11 @@ export function Assignments() {
                   key={assignment.id}
                   to={`/assignments/${assignment.id}`}
                 >
-                  <div className="app-icon">
-                    {assignment.project
-                      ?.app_name?.[0]
-                      ?.toUpperCase() ||
-                      "A"}
-                  </div>
+                  <AppIcon
+  project={
+    assignment.project
+  }
+/>
 
                   <div className="grow">
                     <strong>

@@ -862,8 +862,15 @@ textarea:focus {
 .app-icon {
   width: 42px;
   height: 42px;
+  overflow: hidden;
+  border: 1px solid #e4e7ec;
   border-radius: 12px;
-  background: linear-gradient(135deg, #635bff, #9b8afb);
+  background:
+    linear-gradient(
+      135deg,
+      #635bff,
+      #9b8afb
+    );
   color: #fff;
   display: grid;
   place-items: center;
@@ -871,11 +878,109 @@ textarea:focus {
   flex: 0 0 auto;
 }
 
+.app-icon img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  background: #fff;
+}
+
 .app-icon.large {
   width: 55px;
   height: 55px;
-  font-size: 23px;
-  margin-bottom: 18px;
+  border-radius: 15px;
+}
+
+.app-logo-upload {
+  margin-top: 8px;
+  padding: 16px;
+  border: 1px solid #d0d5dd;
+  border-radius: 14px;
+  background: #f9fafb;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.app-logo-upload-preview {
+  width: 76px;
+  height: 76px;
+  overflow: hidden;
+  flex: 0 0 auto;
+  border: 1px solid #e4e7ec;
+  border-radius: 18px;
+  background:
+    linear-gradient(
+      135deg,
+      #635bff,
+      #9b8afb
+    );
+  color: #fff;
+  display: grid;
+  place-items: center;
+  font: 800 28px Manrope;
+  box-shadow:
+    0 8px 18px
+    rgba(99, 91, 255, 0.12);
+}
+
+.app-logo-upload-preview img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  background: #fff;
+}
+
+.app-logo-upload-copy {
+  min-width: 0;
+  flex: 1;
+}
+
+.app-logo-upload-copy input {
+  margin: 0;
+  background: #fff;
+}
+
+.app-logo-upload-copy small {
+  margin-top: 8px;
+  color: #667085;
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+.app-logo-remove {
+  margin-top: 10px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #b42318;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.app-logo-remove:hover {
+  text-decoration: underline;
+}
+
+@media (max-width: 600px) {
+  .app-logo-upload {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .app-logo-upload-preview {
+    width: 68px;
+    height: 68px;
+    border-radius: 16px;
+  }
+
+  .app-logo-upload-copy {
+    width: 100%;
+  }
 }
 
 .grow {

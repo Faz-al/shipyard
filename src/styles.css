@@ -3435,3 +3435,156 @@ td {
     width: 100%;
   }
 }
+
+
+
+.project-audit-panel {
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid #e4e7ec;
+}
+
+.project-audit-heading {
+  margin-bottom: 16px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.project-audit-heading h3 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.project-audit-heading p {
+  margin: 4px 0 0;
+  font-size: 13px;
+}
+
+.project-audit-list {
+  display: grid;
+  gap: 14px;
+}
+
+.project-audit-entry {
+  overflow: hidden;
+  border: 1px solid #e4e7ec;
+  border-radius: 14px;
+  background: #fff;
+}
+
+.project-audit-entry-head {
+  padding: 15px 16px;
+  border-bottom: 1px solid #eaecf0;
+  background: #f8fafc;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 15px;
+}
+
+.project-audit-entry-head strong,
+.project-audit-entry-head small {
+  display: block;
+}
+
+.project-audit-entry-head strong {
+  font-size: 14px;
+}
+
+.project-audit-entry-head small {
+  margin-top: 4px;
+  color: #667085;
+  font-size: 12px;
+}
+
+.project-audit-fields {
+  display: grid;
+}
+
+.project-audit-field {
+  padding: 16px;
+  border-top: 1px solid #f2f4f7;
+}
+
+.project-audit-field:first-child {
+  border-top: 0;
+}
+
+.project-audit-field > strong {
+  margin-bottom: 10px;
+  display: block;
+  font-size: 13px;
+}
+
+.project-audit-value-grid {
+  display: grid;
+  grid-template-columns:
+    repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.project-audit-value-grid > div,
+.project-audit-legacy-value {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid #eaecf0;
+  border-radius: 10px;
+  background: #fcfcfd;
+}
+
+.project-audit-value-grid span,
+.project-audit-legacy-value span,
+.project-audit-reason span {
+  color: #667085;
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.project-audit-value-grid p,
+.project-audit-legacy-value p {
+  margin: 5px 0 0;
+  color: #344054;
+  font-size: 13px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.project-audit-legacy-value small {
+  margin-top: 7px;
+  color: #98a2b3;
+  display: block;
+  font-size: 11px;
+}
+
+.project-audit-reason {
+  padding: 14px 16px;
+  border-top: 1px solid #eaecf0;
+  background: #fffcf5;
+}
+
+.project-audit-reason p {
+  margin: 5px 0 0;
+  color: #475467;
+  font-size: 13px;
+}
+
+@media (max-width: 700px) {
+  .project-audit-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .project-audit-value-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .project-audit-entry-head {
+    flex-direction: column;
+  }
+}

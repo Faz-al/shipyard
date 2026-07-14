@@ -54,7 +54,8 @@ import {
   adminReviewCheckin,
   adminStats,
   adminUsers,
-  getProofSignedUrl,
+    getProofSignedUrl,
+  listProjectChangeHistory,
   updateProject,
 } from "../lib/api";
 
@@ -176,6 +177,291 @@ function formatCorrectionValue(
   }
 
   return String(value);
+}
+
+function isDetailedAuditValue(
+  value
+) {
+  return Boolean(
+    value &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    (
+      Object.prototype.hasOwnProperty.call(
+        value,
+        "old"
+      ) ||
+      Object.prototype.hasOwnProperty.call(
+        value,
+        "new"
+      )
+    )
+  );
+}
+
+function formatAuditValue(
+  field,
+  value
+) {
+  if (
+    field === "app_logo_url" ||
+    field === "app_logo_path"
+  ) {
+    return value
+      ? "App logo uploaded"
+      : "No app logo";
+  }
+
+  if (
+    value === null ||
+    value === undefined ||
+    value === ""
+  ) {
+    return "Empty";
+  }
+
+  if (
+    typeof value === "object"
+  ) {
+    return JSON.stringify(
+      value
+    );
+  }
+
+  return String(value);
+}
+
+function getAuditFields(
+  changes
+) {
+  return Object.entries(
+    changes || {}
+  ).filter(
+    ([field]) =>
+      field !== "app_logo_path"
+  );
+}
+
+function auditSourceLabel(
+  source
+) {
+  if (
+    source === "correction_approved"
+  ) {
+    return "Admin-approved correction";
+  }
+
+  if (
+    source === "direct_edit"
+  ) {
+    return "Direct developer edit";
+  }
+
+  return statusLabel(source);
+}
+
+
+
+function ProjectChangeHistory({
+  items,
+  loading,
+}) {
+  const visibleItems =
+    Array.isArray(items)
+      ? items
+      : [];
+
+  if (loading) {
+    return (
+      <div className="project-audit-panel">
+        <div className="full-loader inline-loader">
+          <LoaderCircle
+            className="spin"
+          />
+
+          Loading change history…
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="project-audit-panel">
+      <div className="project-audit-heading">
+        <div>
+          <h3>Change history</h3>
+
+          <p>
+            Permanent audit trail of project-detail changes.
+          </p>
+        </div>
+
+        <Badge>
+          {visibleItems.length}{" "}
+          {visibleItems.length === 1
+            ? "entry"
+            : "entries"}
+        </Badge>
+      </div>
+
+      {visibleItems.length ? (
+        <div className="project-audit-list">
+          {visibleItems.map(
+            (entry) => {
+              const actorName =
+                entry.actor?.full_name ||
+                entry.actor?.email ||
+                (
+                  entry.actor_role ===
+                  "system"
+                    ? "Shipyard system"
+                    : "Unknown user"
+                );
+
+              const fields =
+                getAuditFields(
+                  entry.changes
+                );
+
+              return (
+                <article
+                  key={entry.id}
+                  className="project-audit-entry"
+                >
+                  <div className="project-audit-entry-head">
+                    <div>
+                      <strong>
+                        {auditSourceLabel(
+                          entry.source
+                        )}
+                      </strong>
+
+                      <small>
+                        {actorName}
+                        {" · "}
+                        {formatDate(
+                          entry.created_at
+                        )}
+                      </small>
+                    </div>
+
+                    <Badge
+                      tone={
+                        entry.source ===
+                        "correction_approved"
+                          ? "purple"
+                          : "default"
+                      }
+                    >
+                      {entry.actor_role}
+                    </Badge>
+                  </div>
+
+                  {fields.length ? (
+                    <div className="project-audit-fields">
+                      {fields.map(
+                        ([
+                          field,
+                          value,
+                        ]) => {
+                          const detailed =
+                            isDetailedAuditValue(
+                              value
+                            );
+
+                          return (
+                            <div
+                              key={field}
+                              className="project-audit-field"
+                            >
+                              <strong>
+                                {PROJECT_FIELD_LABELS[
+                                  field
+                                ] ||
+                                  statusLabel(
+                                    field
+                                  )}
+                              </strong>
+
+                              {detailed ? (
+                                <div className="project-audit-value-grid">
+                                  <div>
+                                    <span>
+                                      Previous
+                                    </span>
+
+                                    <p>
+                                      {formatAuditValue(
+                                        field,
+                                        value.old
+                                      )}
+                                    </p>
+                                  </div>
+
+                                  <div>
+                                    <span>
+                                      Updated
+                                    </span>
+
+                                    <p>
+                                      {formatAuditValue(
+                                        field,
+                                        value.new
+                                      )}
+                                    </p>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="project-audit-legacy-value">
+                                  <span>
+                                    Updated value
+                                  </span>
+
+                                  <p>
+                                    {formatAuditValue(
+                                      field,
+                                      value
+                                    )}
+                                  </p>
+
+                                  <small>
+                                    Previous value was not recorded for this older entry.
+                                  </small>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        }
+                      )}
+                    </div>
+                  ) : (
+                    <p>
+                      No field details were recorded.
+                    </p>
+                  )}
+
+                  {entry.reason && (
+                    <div className="project-audit-reason">
+                      <span>Reason or note</span>
+
+                      <p>
+                        {entry.reason}
+                      </p>
+                    </div>
+                  )}
+                </article>
+              );
+            }
+          )}
+        </div>
+      ) : (
+        <Empty
+          title="No change history"
+          body="Project edits and approved corrections will appear here."
+        />
+      )}
+    </div>
+  );
 }
 
 
@@ -2164,6 +2450,20 @@ export function AdminProjects() {
     setAssignmentsByProject,
   ] = useState({});
 
+
+    const [
+    historyByProject,
+    setHistoryByProject,
+  ] = useState({});
+
+  const [
+    loadingHistoryProjectId,
+    setLoadingHistoryProjectId,
+  ] = useState(null);
+
+
+  
+
   const [
     expandedProjectId,
     setExpandedProjectId,
@@ -2255,7 +2555,46 @@ export function AdminProjects() {
     }
   };
 
-  const toggleProject = async (
+
+
+    const loadProjectHistory =
+    async (projectId) => {
+      try {
+        setLoadingHistoryProjectId(
+          projectId
+        );
+
+        const data =
+          await listProjectChangeHistory(
+            projectId
+          );
+
+        setHistoryByProject(
+          (current) => ({
+            ...current,
+
+            [projectId]:
+              Array.isArray(data)
+                ? data
+                : [],
+          })
+        );
+      } catch (err) {
+        setError(
+          err.message ||
+            "Could not load project change history."
+        );
+      } finally {
+        setLoadingHistoryProjectId(
+          null
+        );
+      }
+    };
+
+
+
+
+    const toggleProject = async (
     projectId
   ) => {
     if (
@@ -2270,16 +2609,40 @@ export function AdminProjects() {
       projectId
     );
 
+    const requests = [];
+
     if (
       !assignmentsByProject[
         projectId
       ]
     ) {
-      await loadAssignments(
+      requests.push(
+        loadAssignments(
+          projectId
+        )
+      );
+    }
+
+    if (
+      !historyByProject[
         projectId
+      ]
+    ) {
+      requests.push(
+        loadProjectHistory(
+          projectId
+        )
+      );
+    }
+
+    if (requests.length) {
+      await Promise.all(
+        requests
       );
     }
   };
+
+
 
   const change = async (
     id,
@@ -2423,6 +2786,18 @@ export function AdminProjects() {
                 assignmentsByProject[
                   project.id
                 ] || [];
+
+
+                    const history =
+  historyByProject[
+    project.id
+  ] || [];
+
+const loadingHistory =
+  loadingHistoryProjectId ===
+  project.id;
+
+
 
               return (
                 <article
@@ -2804,6 +3179,18 @@ export function AdminProjects() {
                           body="Accepted testers will appear here."
                         />
                       )}
+
+
+                      <ProjectChangeHistory
+  items={history}
+  loading={loadingHistory}
+/>
+
+
+
+
+
+
                     </div>
                   )}
                 </article>

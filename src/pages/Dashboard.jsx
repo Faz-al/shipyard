@@ -1340,51 +1340,69 @@ export function NewProject() {
           </label>
 
           {selectedPlan && (
-            <div className="plan-preview full">
-              <div>
-                <strong>
-                  {
-                    selectedPlan.tester_count
-                  }
-                </strong>
-                <span>
-                  Testers recruited
-                </span>
-              </div>
+  <div className="plan-preview full">
+    {selectedPlan.name === "Early Access" ? (
+      <>
+        <div>
+          <strong>5–14</strong>
+          <span>Target testers</span>
+        </div>
 
-              <div>
-                <strong>
-                  {
-                    selectedPlan.required_completions
-                  }
-                </strong>
-                <span>
-                  Successful completions
-                </span>
-              </div>
+        <div>
+          <strong>Up to 14</strong>
+          <span>Testing days</span>
+        </div>
 
-              <div>
-                <strong>
-                  {
-                    selectedPlan.duration_days
-                  }
-                </strong>
-                <span>Testing days</span>
-              </div>
+        <div>
+          <strong>Flexible</strong>
+          <span>Tester pool</span>
+        </div>
 
-              <div>
-                <strong>
-                  ₹
-                  {
-                    selectedPlan.reward_inr
-                  }
-                </strong>
-                <span>
-                  Reward per tester
-                </span>
-              </div>
-            </div>
-          )}
+        <div>
+          <strong>₹0</strong>
+          <span>Tester rewards</span>
+        </div>
+
+        <div className="full">
+          <p className="plan-note early-access-note">
+  Temporary Early Access pricing. Includes a guaranteed minimum of 5 testers,
+  with the testing pool able to increase up to 14 depending on availability.
+</p>
+        </div>
+      </>
+    ) : (
+      <>
+        <div>
+          <strong>
+            {selectedPlan.tester_count}
+          </strong>
+          <span>Testers recruited</span>
+        </div>
+
+        <div>
+          <strong>
+            {selectedPlan.required_completions}
+          </strong>
+          <span>Successful completions</span>
+        </div>
+
+        <div>
+          <strong>
+            {selectedPlan.duration_days}
+          </strong>
+          <span>Testing days</span>
+        </div>
+
+        <div>
+          <strong>
+            ₹{selectedPlan.reward_inr}
+          </strong>
+          <span>Reward per tester</span>
+        </div>
+      </>
+    )}
+  </div>
+)}
 
           {error && (
             <div className="alert error full">

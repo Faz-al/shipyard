@@ -4184,3 +4184,12 @@
     width: 100%;
   }
 }
+
+.early-access-note {
+  margin: 8px 0 0;
+  font-size: 11px;
+  line-height: 1.45;
+  color: #b42318;
+  text-align: left;
+  opacity: 0.85;
+}

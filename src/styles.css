@@ -3588,3 +3588,55 @@ td {
     flex-direction: column;
   }
 }
+
+@media (max-width: 700px) {
+  .plan-preview {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0;
+    width: 100%;
+  }
+
+  .plan-preview > div {
+    min-width: 0;
+  }
+
+  .plan-preview > div:not(.full) {
+    text-align: left;
+    padding: 0 8px;
+    border-right: 1px solid rgba(0, 0, 0, 0.1);
+  }
+
+  .plan-preview > div:not(.full):first-child {
+    padding-left: 0;
+  }
+
+  .plan-preview > div:not(.full):nth-child(4) {
+    border-right: none;
+    padding-right: 0;
+  }
+
+  .plan-preview > div:not(.full) strong {
+    display: block;
+    font-size: 16px;
+    line-height: 1.15;
+    white-space: nowrap;
+  }
+
+  .plan-preview > div:not(.full) span {
+    display: block;
+    margin-top: 4px;
+    font-size: 9px;
+    line-height: 1.25;
+  }
+
+  .plan-preview .full {
+    grid-column: 1 / -1;
+  }
+
+  .early-access-note {
+    margin-top: 10px;
+    font-size: 10px;
+    line-height: 1.4;
+  }
+}
